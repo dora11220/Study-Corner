@@ -193,7 +193,7 @@ audio_placeholder = st.empty()
 
 # Bell Sound (One-shot)
 if st.session_state.play_bell:
-    audio_placeholder.html(get_audio_html("endBreak.mp3", play_twice=False))
+    audio_placeholder.html(get_audio_html("breakEnd.mp3", play_twice=False))
     st.session_state.play_bell = False # Immediately reset so it doesn't loop
 
 # Alarm Sounds (One-shot)
