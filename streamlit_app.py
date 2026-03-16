@@ -136,4 +136,31 @@ st.header("📜 Lịch sử học tập:")
 if data["history"]:
     # Create the table as a clean HTML string with NO leading indentation
     table_html = '<table style="width:100%; border-collapse: collapse; font-family: sans-serif;">'
-    table_html += '<tr style="border-bottom:
+    table_html += '<tr style="border-bottom: 2px solid #ccc; text-align: left;">'
+    table_html += '<th>User</th><th>Date</th><th>Start</th><th>End</th><th>Duration</th></tr>'
+    
+    for entry in reversed(data["history"]):
+        color = "#1E90FF" if entry["IsBreak"] else "inherit"
+        weight = "bold" if entry["IsBreak"] else "normal"
+        icon = "☕" if entry["IsBreak"] else "📚"
+        
+        table_html += f'<tr style="color: {color}; font-weight: {weight}; border-bottom: 1px solid #eee;">'
+        table_html += f'<td>{entry["User"]} {icon}</td>'
+        table_html += f'<td>{entry["Date"]}</td>'
+        table_html += f'<td>{entry["Start"]}</td>'
+        table_html += f'<td>{entry["End"]}</td>'
+        table_html += f'<td>{entry["Duration"]}</td></tr>'
+    
+    table_html += '</table>'
+    
+    # Use st.markdown with the unsafe flag
+    st.markdown(table_html, unsafe_allow_html=True)
+    
+    if st.button("🗑️ Clear All History"):
+        data["history"] = []
+        st.rerun()
+else:
+    st.info("Chưa có lịch sử nào, hoàn thành 1 lần để hiện ở đây!")
+
+time.sleep(1)
+st.rerun()
