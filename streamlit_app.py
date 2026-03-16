@@ -7,11 +7,13 @@ st.set_page_config(layout="wide")
 
 # 1. Helper for Local Audio
 def get_audio_html(file_name):
-    """Encodes local mp3 to base64 so it can be played in the HTML component."""
-    with open(file_name, "rb") as f:
-        data = f.read()
-        b64 = base64.b64encode(data).decode()
-    return f'<audio autoplay><source src="data:audio/mp3;base64,{b64}" type="audio/mp3"></audio>'
+    try:
+        with open(file_name, "rb") as f:
+            data = f.read()
+            b64 = base64.b64encode(data).decode()
+        return f'<audio autoplay><source src="data:audio/mp3;base64,{b64}" type="audio/mp3"></audio>'
+    except FileNotFoundError:
+        return ""
 
 # 2. Shared Global Memory
 @st.cache_resource
@@ -28,32 +30,28 @@ def get_global_data():
 data = get_global_data()
 timers = data["timers"]
 
-# 3. Timer Engine & History Recording
+# 3. Timer Engine
 current_time = time.time()
-active_alarm = None # Will store 'study' or 'break'
+active_alarm = None 
 
 for name, t_data in timers.items():
     if t_data["status"] == "red":
         elapsed = current_time - t_data["last_tick"]
         t_data["remaining"] -= elapsed
         
-        # When timer hits zero:
         if t_data["remaining"] <= 0:
             if t_data["start_time"]:
                 end_str = datetime.now().strftime("%H:%M:%S")
-                # Save session type
                 data["history"].append({
                     "User": name,
                     "Date": datetime.now().strftime("%Y-%m-%d"),
                     "Start": t_data["start_time"],
                     "End": end_str,
                     "Duration": f"{t_data['initial_minutes']} min",
-                    "IsBreak": t_data["is_break"] # New flag for history styling
+                    "IsBreak": t_data["is_break"]
                 })
             
-            # Determine which sound to play
             active_alarm = "break" if t_data["is_break"] else "study"
-            
             t_data["remaining"] = 0
             t_data["status"] = "gray"
             t_data["start_time"] = None
@@ -66,7 +64,7 @@ if active_alarm == "study":
 elif active_alarm == "break":
     st.components.v1.html(get_audio_html("breakEnd.mp3"), height=0)
 
-# 5. UI Styles (CSS)
+# 5. UI Styles (Fixed Selectors)
 def get_styles(name):
     t = timers[name]
     if t["is_break"]: return {"bg": "#4682B4", "text": "white"}
@@ -78,13 +76,26 @@ s1, s2, s3 = get_styles("Phồng Tôm"), get_styles("Phồng Rơm"), get_styles(
 
 st.markdown(f"""
 <style>
-    [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(1) {{ background-color: {s1['bg']} !important; padding: 20px; border-radius: 15px; }}
-    [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(2) {{ background-color: {s2['bg']} !important; padding: 20px; border-radius: 15px; }}
-    [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(3) {{ background-color: {s3['bg']} !important; padding: 20px; border-radius: 15px; }}
-    
-    [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(1) h1, h2, h3 {{ color: {s1['text']} !important; }}
-    [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(2) h1, h2, h3 {{ color: {s2['text']} !important; }}
-    [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(3) h1, h2, h3 {{ color: {s3['text']} !important; }}
+    /* FIX: We use :not() to ensure we only style columns that are NOT nested 
+       inside another column. This prevents the buttons from turning blue/pink.
+    */
+    [data-testid="stHorizontalBlock"]:not([data-testid="stColumn"] [data-testid="stHorizontalBlock"]) > div[data-testid="stColumn"]:nth-of-type(1) {{ 
+        background-color: {s1['bg']} !important; padding: 20px; border-radius: 15px; 
+    }}
+    [data-testid="stHorizontalBlock"]:not([data-testid="stColumn"] [data-testid="stHorizontalBlock"]) > div[data-testid="stColumn"]:nth-of-type(2) {{ 
+        background-color: {s2['bg']} !important; padding: 20px; border-radius: 15px; 
+    }}
+    [data-testid="stHorizontalBlock"]:not([data-testid="stColumn"] [data-testid="stHorizontalBlock"]) > div[data-testid="stColumn"]:nth-of-type(3) {{ 
+        background-color: {s3['bg']} !important; padding: 20px; border-radius: 15px; 
+    }}
+
+    /* Text Colors */
+    [data-testid="stHorizontalBlock"]:not([data-testid="stColumn"] [data-testid="stHorizontalBlock"]) > div[data-testid="stColumn"]:nth-of-type(1) h1, h2, h3 {{ color: {s1['text']} !important; }}
+    [data-testid="stHorizontalBlock"]:not([data-testid="stColumn"] [data-testid="stHorizontalBlock"]) > div[data-testid="stColumn"]:nth-of-type(2) h1, h2, h3 {{ color: {s2['text']} !important; }}
+    [data-testid="stHorizontalBlock"]:not([data-testid="stColumn"] [data-testid="stHorizontalBlock"]) > div[data-testid="stColumn"]:nth-of-type(3) h1, h2, h3 {{ color: {s3['text']} !important; }}
+
+    /* Keep nested button columns transparent */
+    [data-testid="stColumn"] [data-testid="stColumn"] {{ background-color: transparent !important; padding: 0px !important; }}
     button p {{ color: white !important; font-weight: bold !important; }}
 </style>
 """, unsafe_allow_html=True)
@@ -115,7 +126,6 @@ for user in users:
     name = user["name"]
     with user["col"]:
         st.markdown(f"<h2>{'☕ Break!' if timers[name]['is_break'] else '&nbsp;'}</h2>", unsafe_allow_html=True)
-        # Check if user has an image, otherwise show placeholder
         try:
             st.image(user["image"], width=100)
         except:
@@ -134,12 +144,11 @@ for user in users:
         st.button("Dừng / Tiếp tục", key=f"p_{name}", on_click=lambda n=name: timers[n].update({"status": "yellow" if timers[n]["status"]=="red" else "red"}), use_container_width=True)
         st.button("Reset", key=f"r_{name}", on_click=reset_timer, args=(name,), use_container_width=True)
 
-# 8. History Section (Custom Styled Table)
+# 8. History Section
 st.divider()
 st.header("📜 Lịch sử học tập:")
 
 if data["history"]:
-    # Building a custom HTML table for coloring
     html_table = """
     <table style="width:100%; border-collapse: collapse;">
         <tr style="border-bottom: 2px solid #ccc; text-align: left;">
