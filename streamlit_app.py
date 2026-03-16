@@ -165,4 +165,42 @@ if data["history"]:
     table_html = '<table style="width:100%; border-collapse: collapse; font-family: sans-serif;">'
     table_html += '<tr style="border-bottom: 2px solid #ccc; text-align: left;"><th>User</th><th>Date</th><th>Start</th><th>End</th><th>Duration</th></tr>'
     for entry in reversed(data["history"]):
-        color = "#1E90FF" if entry["IsBreak"] else
+        color = "#1E90FF" if entry["IsBreak"] else "inherit"
+        icon = "☕" if entry["IsBreak"] else "📚"
+        table_html += f'<tr style="color: {color}; border-bottom: 1px solid #eee;"><td>{entry["User"]} {icon}</td><td>{entry["Date"]}</td><td>{entry["Start"]}</td><td>{entry["End"]}</td><td>{entry["Duration"]}</td></tr>'
+    table_html += '</table><br>'
+    st.markdown(table_html, unsafe_allow_html=True)
+    
+    # Action buttons (SINGLE instance)
+    h_col1, h_col2 = st.columns(2)
+    with h_col1:
+        if st.button("🗑️ Clear All History", key="clear_final_btn", use_container_width=True):
+            data["history"] = []
+            st.rerun()
+    with h_col2:
+        df = pd.DataFrame(data["history"])
+        df['Type'] = df['IsBreak'].apply(lambda x: 'Break' if x else 'Study')
+        df_out = df[['User', 'Date', 'Start', 'End', 'Duration', 'Type']]
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_out.to_excel(writer, index=False)
+        st.download_button("📥 Tải file Excel", data=output.getvalue(), file_name="History.xlsx", mime="application/vnd.ms-excel", key="dl_final_btn", use_container_width=True)
+else:
+    st.info("Chưa có lịch sử học tập.")
+
+# --- 8. AUDIO TRIGGER & RERUN LOOP ---
+audio_placeholder = st.empty()
+
+# Bell Sound (One-shot)
+if st.session_state.play_bell:
+    audio_placeholder.html(get_audio_html("endBreak.mp3", play_twice=False))
+    st.session_state.play_bell = False # Immediately reset so it doesn't loop
+
+# Alarm Sounds (One-shot)
+if st.session_state.alarm_trigger:
+    file = "breakEnd.mp3" if st.session_state.alarm_trigger == "break" else "studyEnd.mp3"
+    audio_placeholder.html(get_audio_html(file, play_twice=True))
+    st.session_state.alarm_trigger = None # Immediately reset
+
+time.sleep(1)
+st.rerun()
