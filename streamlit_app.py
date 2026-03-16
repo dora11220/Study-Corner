@@ -29,8 +29,7 @@ def play_local_audio(file_path):
             audio_base64 = base64.b64encode(audio_bytes).decode()
             audio_tag = f'<audio autoplay="true"><source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3"></audio>'
             st.components.v1.html(audio_tag, height=0)
-    except FileNotFoundError:
-        pass # Silently skip if file is missing
+    except: pass
 
 # 3. Timer Engine
 current_time = time.time()
@@ -40,7 +39,6 @@ for name, t_data in timers.items():
     if t_data["status"] == "red":
         elapsed = current_time - t_data["last_tick"]
         t_data["remaining"] -= elapsed
-        
         if t_data["remaining"] <= 0:
             active_alarm = "breakEnd.mp3" if t_data["is_break"] else "studyEnd.mp3"
             if t_data["start_time"]:
@@ -55,43 +53,55 @@ for name, t_data in timers.items():
             t_data.update({"remaining": 0, "status": "gray", "start_time": None})
     t_data["last_tick"] = current_time
 
-# 4. FIXED CSS (Surgical targeting & Growing Button)
+# 4. THE NUCLEAR CSS FIX
 def get_styles(name):
     t = timers[name]
-    if t["is_break"]: return {"bg": "#4682B4", "text": "white"} # Steel Blue
-    if t["status"] == "red": return {"bg": "#FFB3B3", "text": "#31333F"} # Soft Red
-    return {"bg": "#F0F2F6", "text": "#31333F"} # Default Gray
+    if t["is_break"]: return {"bg": "#4682B4", "text": "#FFFFFF"}
+    if t["status"] == "red": return {"bg": "#FFB3B3", "text": "#31333F"}
+    return {"bg": "#F0F2F6", "text": "#31333F"}
 
 s1, s2, s3 = get_styles("Phồng Tôm"), get_styles("Phồng Rơm"), get_styles("Thành Đỗ")
 
+# Generate Dynamic CSS for Chat Buttons
+chat_styles = ""
+for name in ["Phồng Tôm", "Phồng Rơm", "Thành Đỗ"]:
+    if timers[name]["chat_requested"]:
+        chat_styles += f"""
+        div[data-testid="stColumn"] button[key*="chat_{name}"] {{
+            background-color: #00EAFF !important;
+            transform: scale(1.25) !important;
+            box-shadow: 0px 0px 20px #00EAFF !important;
+            border: 2px solid white !important;
+            z-index: 10 !important;
+        }}
+        div[data-testid="stColumn"] button[key*="chat_{name}"] p {{
+            color: black !important;
+        }}
+        """
+
 st.markdown(f"""
 <style>
-    /* 1. Target ONLY the 3 main top-level columns to prevent color bleeding */
-    [data-testid="stMain"] [data-testid="stHorizontalBlock"]:first-of-type > div[data-testid="stColumn"]:nth-of-type(1) {{ background-color: {s1['bg']} !important; padding: 25px; border-radius: 20px; }}
-    [data-testid="stMain"] [data-testid="stHorizontalBlock"]:first-of-type > div[data-testid="stColumn"]:nth-of-type(2) {{ background-color: {s2['bg']} !important; padding: 25px; border-radius: 20px; }}
-    [data-testid="stMain"] [data-testid="stHorizontalBlock"]:first-of-type > div[data-testid="stColumn"]:nth-of-type(3) {{ background-color: {s3['bg']} !important; padding: 25px; border-radius: 20px; }}
-    
-    /* Dynamic Text Colors */
-    [data-testid="stMain"] [data-testid="stHorizontalBlock"]:first-of-type > div[data-testid="stColumn"]:nth-of-type(1) :is(h1,h2,h3,p) {{ color: {s1['text']} !important; }}
-    [data-testid="stMain"] [data-testid="stHorizontalBlock"]:first-of-type > div[data-testid="stColumn"]:nth-of-type(2) :is(h1,h2,h3,p) {{ color: {s2['text']} !important; }}
-    [data-testid="stMain"] [data-testid="stHorizontalBlock"]:first-of-type > div[data-testid="stColumn"]:nth-of-type(3) :is(h1,h2,h3,p) {{ color: {s3['text']} !important; }}
+    /* 1. Main Column Backgrounds - Extremely specific targeting */
+    [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(1) {{ background-color: {s1['bg']} !important; padding: 25px; border-radius: 20px; }}
+    [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(2) {{ background-color: {s2['bg']} !important; padding: 25px; border-radius: 20px; }}
+    [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(3) {{ background-color: {s3['bg']} !important; padding: 25px; border-radius: 20px; }}
 
-    /* 2. Chat Button Styling (GROW EFFECT & BRIGHT BLUE) */
-    button[key*="chat_"] {{
-        transition: all 0.3s ease-in-out !important;
-        border: none !important;
-    }}
-    
-    /* This makes the active chat button bigger and brighter */
-    .chat-active button {{
-        background-color: #00EAFF !important; /* Neon Bright Blue */
-        transform: scale(1.15) !important;   /* Grows in size */
-        box-shadow: 0px 0px 15px #00EAFF !important;
-        color: black !important;
-    }}
+    /* 2. Fix nested column "bleed" (make sub-columns transparent) */
+    div[data-testid="stColumn"] div[data-testid="stColumn"] {{ background-color: transparent !important; padding: 0px !important; }}
 
-    /* Global button text */
-    button p {{ color: white !important; font-weight: bold !important; }}
+    /* 3. Text Color Logic */
+    [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(1) :is(h1,h2,h3,p,span) {{ color: {s1['text']} !important; }}
+    [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(2) :is(h1,h2,h3,p,span) {{ color: {s2['text']} !important; }}
+    [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(3) :is(h1,h2,h3,p,span) {{ color: {s3['text']} !important; }}
+
+    /* 4. Global Button Text Fix (Force White on Action Buttons) */
+    button p {{ color: white !important; font-size: 14px !important; font-weight: bold !important; }}
+    
+    /* 5. Chat Button Specific Styles */
+    {chat_styles}
+    
+    /* Small animation for all buttons */
+    button {{ transition: all 0.2s ease-in-out !important; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -104,13 +114,10 @@ users = [("Phồng Tôm", "ptom.jpg"), ("Phồng Rơm", "prom.jpg"), ("Thành Đ
 
 for i, (name, img) in enumerate(users):
     with cols[i]:
-        # Chat Button Wrapper
-        chat_active_class = "chat-active" if timers[name]["chat_requested"] else ""
-        st.markdown(f'<div class="{chat_active_class}">', unsafe_allow_html=True)
+        # Chat Button - Now with distinct key for CSS targeting
         st.button("💬 want to chat!" if timers[name]["chat_requested"] else "💬", 
                   key=f"chat_{name}", 
                   on_click=lambda n=name: timers[n].update({"chat_requested": not timers[n]["chat_requested"]}))
-        st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown(f"<h2>{'☕ Break!' if timers[name]['is_break'] else '&nbsp;'}</h2>", unsafe_allow_html=True)
         st.image(img, width=100)
@@ -135,8 +142,8 @@ st.divider()
 st.header("📜 Lịch sử học tập")
 if data["history"]:
     df = pd.DataFrame(data["history"])
-    st.table(df.style.apply(lambda row: ['color: #1E90FF' if row['Mode'] == 'Break' else 'color: black']*len(row), axis=1))
-    if st.button("🗑️ Clear All History"):
+    st.table(df.style.apply(lambda row: ['color: #1E90FF' if row['Mode'] == 'Break' else 'color: white']*len(row), axis=1))
+    if st.button("🗑️ Clear All History", key="clear_all"):
         data["history"] = []
         st.rerun()
 
