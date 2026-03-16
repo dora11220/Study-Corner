@@ -117,7 +117,7 @@ for user in users:
         
         st.button("Add 50 Min", key=f"50_{name}", on_click=add_time, args=(name, 50), use_container_width=True)
         c_a, c_b = st.columns(2)
-        c_a.button("+10m", key=f"10_{name}", on_click=add_time, args=(name, 10), use_container_width=True)
+        c_a.button("+1m", key=f"1_{name}", on_click=add_time, args=(name, 1), use_container_width=True)
         c_b.button("+5m", key=f"5_{name}", on_click=add_time, args=(name, 5), use_container_width=True)
         st.button("Break Mode ☕", key=f"b_{name}", on_click=lambda n=name: timers[n].update({"is_break": not timers[n]["is_break"]}), use_container_width=True)
         st.button("Pause/Resume", key=f"p_{name}", on_click=lambda n=name: timers[n].update({"status": "yellow" if timers[n]["status"]=="red" else "red"}), use_container_width=True)
