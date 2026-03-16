@@ -1,17 +1,44 @@
 import streamlit as st
 import time
 import base64
+import pandas as pd
+import io
 from datetime import datetime
 
 st.set_page_config(layout="wide")
 
+# Initialize session state for the Bell
+if "play_bell" not in st.session_state:
+    st.session_state.play_bell = False
+
 # 1. Helper for Local Audio
-def get_audio_html(file_name):
+def get_audio_html(file_name, play_twice=False):
+    """Encodes local mp3 to base64 and optionally plays it twice."""
     try:
         with open(file_name, "rb") as f:
             data = f.read()
             b64 = base64.b64encode(data).decode()
-        return f'<audio autoplay><source src="data:audio/mp3;base64,{b64}" type="audio/mp3"></audio>'
+            
+        if play_twice:
+            # We use a bit of JavaScript to guarantee max volume and play it exactly twice
+            return f"""
+            <audio id="alarmAudio" autoplay>
+                <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+            </audio>
+            <script>
+                var aud = document.getElementById("alarmAudio");
+                aud.volume = 1.0; // Forces max browser volume
+                var playCount = 1;
+                aud.onended = function() {{
+                    if (playCount < 2) {{
+                        playCount++;
+                        aud.play();
+                    }}
+                }};
+            </script>
+            """
+        else:
+            return f'<audio autoplay><source src="data:audio/mp3;base64,{b64}" type="audio/mp3"></audio>'
     except Exception:
         return ""
 
@@ -59,10 +86,16 @@ for name, t_data in timers.items():
     t_data["last_tick"] = current_time
 
 # 4. Sound Triggering
+# Trigger end of timer alarms (plays twice)
 if active_alarm == "study":
-    st.components.v1.html(get_audio_html("studyEnd.mp3"), height=0)
+    st.components.v1.html(get_audio_html("studyEnd.mp3", play_twice=True), height=0)
 elif active_alarm == "break":
-    st.components.v1.html(get_audio_html("breakEnd.mp3"), height=0)
+    st.components.v1.html(get_audio_html("breakEnd.mp3", play_twice=True), height=0)
+
+# Trigger manual bell (plays once)
+if st.session_state.play_bell:
+    st.components.v1.html(get_audio_html("endBreak.mp3", play_twice=False), height=0)
+    st.session_state.play_bell = False # Reset flag after playing
 
 # 5. UI Styles
 def get_styles(name):
@@ -100,8 +133,16 @@ def add_time(name, minutes):
 def reset_timer(name):
     timers[name].update({"remaining": 0.0, "status": "gray", "is_break": False, "start_time": None})
 
-# 7. Main UI
-st.title("⏱️ Góc học tập cute")
+# 7. Main UI (Header & Columns)
+col_title, col_bell = st.columns([10, 1])
+with col_title:
+    st.title("⏱️ Góc học tập cute")
+with col_bell:
+    st.write("<br>", unsafe_allow_html=True) # Adds a little spacing to align with the title
+    if st.button("🔔", help="Play Bell"):
+        st.session_state.play_bell = True
+        st.rerun()
+
 col1, col2, col3 = st.columns(3)
 users = [
     {"name": "Phồng Tôm", "image": "ptom.jpg", "col": col1},
@@ -129,12 +170,11 @@ for user in users:
         st.button("Dừng / Tiếp tục", key=f"p_{name}", on_click=lambda n=name: timers[n].update({"status": "yellow" if timers[n]["status"]=="red" else "red"}), use_container_width=True)
         st.button("Reset", key=f"r_{name}", on_click=reset_timer, args=(name,), use_container_width=True)
 
-# 8. FIXED HISTORY SECTION
+# 8. History Section & Excel Download
 st.divider()
 st.header("📜 Lịch sử học tập:")
 
 if data["history"]:
-    # Create the table as a clean HTML string with NO leading indentation
     table_html = '<table style="width:100%; border-collapse: collapse; font-family: sans-serif;">'
     table_html += '<tr style="border-bottom: 2px solid #ccc; text-align: left;">'
     table_html += '<th>User</th><th>Date</th><th>Start</th><th>End</th><th>Duration</th></tr>'
@@ -151,14 +191,36 @@ if data["history"]:
         table_html += f'<td>{entry["End"]}</td>'
         table_html += f'<td>{entry["Duration"]}</td></tr>'
     
-    table_html += '</table>'
-    
-    # Use st.markdown with the unsafe flag
+    table_html += '</table><br>'
     st.markdown(table_html, unsafe_allow_html=True)
     
-    if st.button("🗑️ XÓA MỌI LỊCH SỬ - ĐỪNG CÓ BẤM BỪA"):
-        data["history"] = []
-        st.rerun()
+    # --- Action Buttons (Clear & Excel) ---
+    btn_col1, btn_col2 = st.columns([1, 1])
+    
+    with btn_col1:
+        if st.button("🗑️ Clear All History", use_container_width=True):
+            data["history"] = []
+            st.rerun()
+            
+    with btn_col2:
+        # Generate Excel file in memory
+        df = pd.DataFrame(data["history"])
+        # Swap true/false for readable text in Excel
+        df['Session Type'] = df['IsBreak'].apply(lambda x: 'Break' if x else 'Study')
+        df = df.drop(columns=['IsBreak']) # Remove the raw boolean column
+        
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Study History')
+        
+        st.download_button(
+            label="📥 Tải file Excel",
+            data=output.getvalue(),
+            file_name=f"Lich_su_hoc_tap_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+
 else:
     st.info("Chưa có lịch sử nào, hoàn thành 1 lần để hiện ở đây!")
 
