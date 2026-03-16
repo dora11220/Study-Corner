@@ -156,7 +156,7 @@ if data["history"]:
     # Use st.markdown with the unsafe flag
     st.markdown(table_html, unsafe_allow_html=True)
     
-    if st.button("🗑️ Clear All History"):
+    if st.button("🗑️ XÓA MỌI LỊCH SỬ - ĐỪNG CÓ BẤM BỪA"):
         data["history"] = []
         st.rerun()
 else:
