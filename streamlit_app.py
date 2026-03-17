@@ -145,4 +145,55 @@ for user in users:
         st.markdown(f"<h1 style='text-align: center;'>{mm:02d}:{ss:02d}</h1>", unsafe_allow_html=True)
         st.button("+ 50 phút", key=f"50_{n}", on_click=add_time, args=(n, 50), use_container_width=True)
         ca, cb = st.columns(2)
-        ca.button("+ 1p", key=f"1_{n
+        ca.button("+ 1p", key=f"1_{n}", on_click=add_time, args=(n, 1), use_container_width=True)
+        cb.button("+ 5p", key=f"5_{n}", on_click=add_time, args=(n, 5), use_container_width=True)
+        st.button("Giải lao ☕", key=f"b_{n}", on_click=lambda x=n: timers[x].update({"is_break": not timers[x]["is_break"]}), use_container_width=True)
+        st.button("Dừng / Tiếp tục", key=f"p_{n}", on_click=lambda x=n: timers[x].update({"status": "yellow" if timers[x]["status"]=="red" else "red"}), use_container_width=True)
+        st.button("Reset", key=f"r_{n}", on_click=lambda x=n: timers[x].update({"remaining": 0.0, "status": "gray", "is_break": False, "start_time": None}), use_container_width=True)
+
+# --- 6. HISTORY SECTION (HTML FIXED) ---
+st.divider()
+st.header("📜 Lịch sử học tập:")
+
+if data["history"]:
+    table_html = '<table style="width:100%; border-collapse: collapse; font-family: sans-serif;">'
+    table_html += '<tr style="border-bottom: 2px solid #ccc; text-align: left;"><th>User</th><th>Date</th><th>Start</th><th>End</th><th>Duration</th></tr>'
+    for entry in reversed(data["history"]):
+        color = "#1E90FF" if entry["IsBreak"] else "inherit"
+        icon = "☕" if entry["IsBreak"] else "📚"
+        table_html += f'<tr style="color: {color}; border-bottom: 1px solid #eee;"><td>{entry["User"]} {icon}</td><td>{entry["Date"]}</td><td>{entry["Start"]}</td><td>{entry["End"]}</td><td>{entry["Duration"]}</td></tr>'
+    table_html += '</table><br>'
+    st.markdown(table_html, unsafe_allow_html=True)
+    
+    h_col1, h_col2 = st.columns(2)
+    with h_col1:
+        if st.button("🗑️ Clear All History", key="clear_final_btn", use_container_width=True):
+            data["history"] = []
+            st.rerun()
+    with h_col2:
+        df = pd.DataFrame(data["history"])
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer: df.to_excel(writer, index=False)
+        st.download_button("📥 Tải file Excel", data=output.getvalue(), file_name="History.xlsx", mime="application/vnd.ms-excel", key="dl_final_btn", use_container_width=True)
+else:
+    st.info("Chưa có lịch sử học tập.")
+
+# --- 7. AUDIO TRIGGER & RERUN LOOP ---
+audio_placeholder = st.empty()
+sleep_time = 1
+
+# Bell Sound
+if data["last_global_bell_trigger"] > st.session_state.last_heard_global_bell:
+    audio_placeholder.html(get_audio_html("bellButton.mp3"))
+    st.session_state.last_heard_global_bell = data["last_global_bell_trigger"]
+    sleep_time = 4  # Wait 4 seconds for sound to play
+
+# Alarm Sounds
+if st.session_state.alarm_trigger:
+    f = "breakEnd.mp3" if st.session_state.alarm_trigger == "break" else "studyEnd.mp3"
+    audio_placeholder.html(get_audio_html(f, play_twice=True))
+    st.session_state.alarm_trigger = None 
+    sleep_time = 4  # Wait 4 seconds for sound to play
+
+time.sleep(sleep_time)
+st.rerun()
