@@ -179,4 +179,32 @@ if data["history"]:
     
     h_col1, h_col2 = st.columns(2)
     with h_col1:
-        if st.button
+        if st.button("🗑️ Clear All History", key="clear_final_btn", use_container_width=True):
+            data["history"] = []
+            st.rerun()
+    with h_col2:
+        df = pd.DataFrame(data["history"])
+        df['Type'] = df['IsBreak'].apply(lambda x: 'Break' if x else 'Study')
+        df_out = df[['User', 'Date', 'Start', 'End', 'Duration', 'Type']]
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_out.to_excel(writer, index=False)
+        st.download_button("📥 Tải file Excel", data=output.getvalue(), file_name=f"History_{get_gmt7_time('%Y-%m-%d')}.xlsx", mime="application/vnd.ms-excel", key="dl_final_btn", use_container_width=True)
+else:
+    st.info("Chưa có lịch sử học tập.")
+
+# --- 8. AUDIO TRIGGER & RERUN LOOP ---
+bell_placeholder = st.empty()
+alarm_placeholder = st.empty()
+
+if data["last_global_bell_time"] > st.session_state.local_played_bell_time:
+    bell_placeholder.html(get_audio_html("endBreak.mp3", play_twice=False))
+    st.session_state.local_played_bell_time = data["last_global_bell_time"]
+
+if st.session_state.alarm_trigger:
+    file = "breakEnd.mp3" if st.session_state.alarm_trigger == "break" else "studyEnd.mp3"
+    alarm_placeholder.html(get_audio_html(file, play_twice=True))
+    st.session_state.alarm_trigger = None 
+
+time.sleep(1)
+st.rerun()
