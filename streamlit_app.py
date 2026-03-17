@@ -3,12 +3,16 @@ import time
 import base64
 import pandas as pd
 import io
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 st.set_page_config(layout="wide")
 
-# --- 1. SESSION STATE INITIALIZATION ---
-if "play_bell" not in st.session_state: st.session_state.play_bell = False
+# --- 0. TIMEZONE SETUP (GMT+7 Vietnam) ---
+gmt7 = timezone(timedelta(hours=7))
+
+# --- 1. SESSION STATE INITIALIZATION (Local to each user) ---
+# We keep track of the last time THIS specific user heard the bell
+if "local_played_bell_time" not in st.session_state: st.session_state.local_played_bell_time = 0.0
 if "alarm_trigger" not in st.session_state: st.session_state.alarm_trigger = None
 
 # --- 2. AUDIO ENGINE ---
@@ -45,7 +49,7 @@ def get_audio_html(file_name, play_twice=False):
     except Exception as e:
         return f""
 
-# --- 3. DATA & TIMER LOGIC ---
+# --- 3. SHARED GLOBAL MEMORY (Shared across ALL users) ---
 @st.cache_resource
 def get_global_data():
     return {
@@ -54,7 +58,8 @@ def get_global_data():
             "Phồng Rơm": {"remaining": 0.0, "status": "gray", "last_tick": time.time(), "is_break": False, "start_time": None, "initial_minutes": 0},
             "Thành Đỗ":  {"remaining": 0.0, "status": "gray", "last_tick": time.time(), "is_break": False, "start_time": None, "initial_minutes": 0}
         },
-        "history": []
+        "history": [],
+        "last_global_bell_time": 0.0 # <--- NEW: Shared bell timestamp
     }
 
 data = get_global_data()
@@ -71,20 +76,22 @@ for name, t_data in timers.items():
             if t_data["start_time"]:
                 data["history"].append({
                     "User": name,
-                    "Date": datetime.now().strftime("%Y-%m-%d"),
+                    "Date": datetime.now(gmt7).strftime("%Y-%m-%d"), # GMT+7
                     "Start": t_data["start_time"],
-                    "End": datetime.now().strftime("%H:%M:%S"),
+                    "End": datetime.now(gmt7).strftime("%H:%M:%S"), # GMT+7
                     "Duration": f"{t_data['initial_minutes']} min",
                     "IsBreak": t_data["is_break"]
                 })
             
+            # Alarms are still triggered locally because the 1-second refresh guarantees
+            # everyone's browser will naturally hit this 0 mark at roughly the same time.
             st.session_state.alarm_trigger = "break" if t_data["is_break"] else "study"
             t_data["remaining"] = 0
             t_data["status"] = "gray"
             t_data["start_time"] = None
     t_data["last_tick"] = current_time
 
-# --- 4. CSS STYLES (NO BLEEDING) ---
+# --- 4. CSS STYLES ---
 def get_styles(name):
     t = timers[name]
     if t["is_break"]: return {"bg": "#4682B4", "text": "white"}
@@ -111,7 +118,7 @@ st.markdown(f"""
 # --- 5. UI ACTIONS ---
 def add_time(name, minutes):
     if timers[name]["remaining"] == 0:
-        timers[name]["start_time"] = datetime.now().strftime("%H:%M:%S")
+        timers[name]["start_time"] = datetime.now(gmt7).strftime("%H:%M:%S") # GMT+7
         timers[name]["initial_minutes"] = minutes
     else:
         timers[name]["initial_minutes"] += minutes
@@ -124,8 +131,9 @@ with col_title:
     st.title("⏱️ Góc học tập cute")
 with col_bell:
     st.write("<br>", unsafe_allow_html=True)
-    if st.button("🔔", help="Play Bell", key="global_bell_btn"):
-        st.session_state.play_bell = True
+    if st.button("🔔", help="Play Bell (Broadcasts to everyone)", key="global_bell_btn"):
+        # Update the GLOBAL memory with the current time
+        data["last_global_bell_time"] = time.time()
         st.rerun()
 
 col1, col2, col3 = st.columns(3)
@@ -161,7 +169,6 @@ st.divider()
 st.header("📜 Lịch sử học tập:")
 
 if data["history"]:
-    # Render table
     table_html = '<table style="width:100%; border-collapse: collapse; font-family: sans-serif;">'
     table_html += '<tr style="border-bottom: 2px solid #ccc; text-align: left;"><th>User</th><th>Date</th><th>Start</th><th>End</th><th>Duration</th></tr>'
     for entry in reversed(data["history"]):
@@ -171,7 +178,6 @@ if data["history"]:
     table_html += '</table><br>'
     st.markdown(table_html, unsafe_allow_html=True)
     
-    # Action buttons (SINGLE instance)
     h_col1, h_col2 = st.columns(2)
     with h_col1:
         if st.button("🗑️ Clear All History", key="clear_final_btn", use_container_width=True):
@@ -184,23 +190,27 @@ if data["history"]:
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df_out.to_excel(writer, index=False)
-        st.download_button("📥 Tải file Excel", data=output.getvalue(), file_name="History.xlsx", mime="application/vnd.ms-excel", key="dl_final_btn", use_container_width=True)
+        st.download_button("📥 Tải file Excel", data=output.getvalue(), file_name=f"History_{datetime.now(gmt7).strftime('%Y-%m-%d')}.xlsx", mime="application/vnd.ms-excel", key="dl_final_btn", use_container_width=True)
 else:
     st.info("Chưa có lịch sử học tập.")
 
 # --- 8. AUDIO TRIGGER & RERUN LOOP ---
-audio_placeholder = st.empty()
+# Use two separate placeholders so the bell and alarm don't overwrite each other
+bell_placeholder = st.empty()
+alarm_placeholder = st.empty()
 
-# Bell Sound (One-shot)
-if st.session_state.play_bell:
-    audio_placeholder.html(get_audio_html("breakEnd.mp3", play_twice=False))
-    st.session_state.play_bell = False # Immediately reset so it doesn't loop
+# 1. Check for Global Bell Trigger
+# If the global timestamp is newer than the last time THIS user played the bell...
+if data["last_global_bell_time"] > st.session_state.local_played_bell_time:
+    bell_placeholder.html(get_audio_html("endBreak.mp3", play_twice=False))
+    # Update this user's local memory so it doesn't loop
+    st.session_state.local_played_bell_time = data["last_global_bell_time"]
 
-# Alarm Sounds (One-shot)
+# 2. Check for Local Timer Alarms
 if st.session_state.alarm_trigger:
     file = "breakEnd.mp3" if st.session_state.alarm_trigger == "break" else "studyEnd.mp3"
-    audio_placeholder.html(get_audio_html(file, play_twice=True))
-    st.session_state.alarm_trigger = None # Immediately reset
+    alarm_placeholder.html(get_audio_html(file, play_twice=True))
+    st.session_state.alarm_trigger = None # Reset immediately
 
 time.sleep(1)
 st.rerun()
