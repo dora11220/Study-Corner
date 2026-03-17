@@ -3,21 +3,23 @@ import time
 import base64
 import pandas as pd
 import io
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 st.set_page_config(layout="wide")
 
-# --- 0. TIMEZONE SETUP (GMT+7 Vietnam) ---
-gmt7 = timezone(timedelta(hours=7))
+# --- 0. BULLETPROOF GMT+7 TIME FUNCTION ---
+def get_gmt7_time(format_str):
+    """Forces the time to be UTC + 7 hours exactly."""
+    # Get standard UTC time, then mathematically add 7 hours
+    gmt7_time = datetime.now(timezone.utc) + timedelta(hours=7)
+    return gmt7_time.strftime(format_str)
 
-# --- 1. SESSION STATE INITIALIZATION (Local to each user) ---
-# We keep track of the last time THIS specific user heard the bell
+# --- 1. SESSION STATE INITIALIZATION ---
 if "local_played_bell_time" not in st.session_state: st.session_state.local_played_bell_time = 0.0
 if "alarm_trigger" not in st.session_state: st.session_state.alarm_trigger = None
 
 # --- 2. AUDIO ENGINE ---
 def get_audio_html(file_name, play_twice=False):
-    """Encodes local mp3 and returns an HTML audio tag with autoplay logic."""
     try:
         with open(file_name, "rb") as f:
             data = f.read()
@@ -49,7 +51,7 @@ def get_audio_html(file_name, play_twice=False):
     except Exception as e:
         return f""
 
-# --- 3. SHARED GLOBAL MEMORY (Shared across ALL users) ---
+# --- 3. SHARED GLOBAL MEMORY ---
 @st.cache_resource
 def get_global_data():
     return {
@@ -59,7 +61,7 @@ def get_global_data():
             "Thành Đỗ":  {"remaining": 0.0, "status": "gray", "last_tick": time.time(), "is_break": False, "start_time": None, "initial_minutes": 0}
         },
         "history": [],
-        "last_global_bell_time": 0.0 # <--- NEW: Shared bell timestamp
+        "last_global_bell_time": 0.0 
     }
 
 data = get_global_data()
@@ -76,15 +78,13 @@ for name, t_data in timers.items():
             if t_data["start_time"]:
                 data["history"].append({
                     "User": name,
-                    "Date": datetime.now(gmt7).strftime("%Y-%m-%d"), # GMT+7
+                    "Date": get_gmt7_time("%Y-%m-%d"), 
                     "Start": t_data["start_time"],
-                    "End": datetime.now(gmt7).strftime("%H:%M:%S"), # GMT+7
+                    "End": get_gmt7_time("%H:%M:%S"), 
                     "Duration": f"{t_data['initial_minutes']} min",
                     "IsBreak": t_data["is_break"]
                 })
             
-            # Alarms are still triggered locally because the 1-second refresh guarantees
-            # everyone's browser will naturally hit this 0 mark at roughly the same time.
             st.session_state.alarm_trigger = "break" if t_data["is_break"] else "study"
             t_data["remaining"] = 0
             t_data["status"] = "gray"
@@ -118,7 +118,7 @@ st.markdown(f"""
 # --- 5. UI ACTIONS ---
 def add_time(name, minutes):
     if timers[name]["remaining"] == 0:
-        timers[name]["start_time"] = datetime.now(gmt7).strftime("%H:%M:%S") # GMT+7
+        timers[name]["start_time"] = get_gmt7_time("%H:%M:%S") 
         timers[name]["initial_minutes"] = minutes
     else:
         timers[name]["initial_minutes"] += minutes
@@ -132,7 +132,6 @@ with col_title:
 with col_bell:
     st.write("<br>", unsafe_allow_html=True)
     if st.button("🔔", help="Play Bell (Broadcasts to everyone)", key="global_bell_btn"):
-        # Update the GLOBAL memory with the current time
         data["last_global_bell_time"] = time.time()
         st.rerun()
 
@@ -180,37 +179,4 @@ if data["history"]:
     
     h_col1, h_col2 = st.columns(2)
     with h_col1:
-        if st.button("🗑️ Clear All History", key="clear_final_btn", use_container_width=True):
-            data["history"] = []
-            st.rerun()
-    with h_col2:
-        df = pd.DataFrame(data["history"])
-        df['Type'] = df['IsBreak'].apply(lambda x: 'Break' if x else 'Study')
-        df_out = df[['User', 'Date', 'Start', 'End', 'Duration', 'Type']]
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_out.to_excel(writer, index=False)
-        st.download_button("📥 Tải file Excel", data=output.getvalue(), file_name=f"History_{datetime.now(gmt7).strftime('%Y-%m-%d')}.xlsx", mime="application/vnd.ms-excel", key="dl_final_btn", use_container_width=True)
-else:
-    st.info("Chưa có lịch sử học tập.")
-
-# --- 8. AUDIO TRIGGER & RERUN LOOP ---
-# Use two separate placeholders so the bell and alarm don't overwrite each other
-bell_placeholder = st.empty()
-alarm_placeholder = st.empty()
-
-# 1. Check for Global Bell Trigger
-# If the global timestamp is newer than the last time THIS user played the bell...
-if data["last_global_bell_time"] > st.session_state.local_played_bell_time:
-    bell_placeholder.html(get_audio_html("endBreak.mp3", play_twice=False))
-    # Update this user's local memory so it doesn't loop
-    st.session_state.local_played_bell_time = data["last_global_bell_time"]
-
-# 2. Check for Local Timer Alarms
-if st.session_state.alarm_trigger:
-    file = "breakEnd.mp3" if st.session_state.alarm_trigger == "break" else "studyEnd.mp3"
-    alarm_placeholder.html(get_audio_html(file, play_twice=True))
-    st.session_state.alarm_trigger = None # Reset immediately
-
-time.sleep(1)
-st.rerun()
+        if st.button
