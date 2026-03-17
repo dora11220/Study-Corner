@@ -201,7 +201,7 @@ audio_placeholder = st.empty()
 # Global Bell Broadcast:
 # If the shared timestamp is newer than what THIS user last heard, play the sound.
 if data["last_global_bell_trigger"] > st.session_state.last_heard_global_bell:
-    audio_placeholder.html(get_audio_html("endBreak.mp3", play_twice=False))
+    audio_placeholder.html(get_audio_html("breakEnd.mp3", play_twice=False))
     st.session_state.last_heard_global_bell = data["last_global_bell_trigger"]
 
 # Local Alarms:
