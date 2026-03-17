@@ -15,7 +15,7 @@ def get_now_gmt7():
 if "last_heard_global_bell" not in st.session_state: st.session_state.last_heard_global_bell = 0.0
 if "alarm_trigger" not in st.session_state: st.session_state.alarm_trigger = None
 
-# --- 2. AUDIO ENGINE (With Safety) ---
+# --- 2. AUDIO ENGINE ---
 def get_audio_html(file_name, play_twice=False):
     try:
         with open(file_name, "rb") as f:
@@ -52,7 +52,7 @@ def get_global_data():
             "Phồng Tôm": {"remaining": 0.0, "status": "gray", "last_tick": time.time(), "is_break": False, "start_time": None, "initial_minutes": 0},
             "Phồng Rơm": {"remaining": 0.0, "status": "gray", "last_tick": time.time(), "is_break": False, "start_time": None, "initial_minutes": 0},
             "Thanh Độ":  {"remaining": 0.0, "status": "gray", "last_tick": time.time(), "is_break": False, "start_time": None, "initial_minutes": 0},
-            "黄明":     {"remaining": 0.0, "status": "gray", "last_tick": time.time(), "is_break": False, "start_time": None, "initial_minutes": 0}
+            "黄明":      {"remaining": 0.0, "status": "gray", "last_tick": time.time(), "is_break": False, "start_time": None, "initial_minutes": 0}
         },
         "history": [],
         "last_global_bell_trigger": 0.0 
@@ -79,7 +79,7 @@ for name, t_data in timers.items():
             t_data["remaining"], t_data["status"], t_data["start_time"] = 0, "gray", None
     t_data["last_tick"] = current_time
 
-# --- 4. STYLES & LAYOUT ---
+# --- 4. STYLES & VISIBILITY FIX ---
 def get_styles(name):
     t = timers[name]
     if t["is_break"]: return {"bg": "#4682B4", "text": "white"}
@@ -91,10 +91,18 @@ s1, s2, s3, s4 = get_styles("Phồng Tôm"), get_styles("Phồng Rơm"), get_sty
 
 st.markdown(f"""
 <style>
-    div[data-testid="stColumn"]:has(.marker-1) {{ background-color: {s1['bg']} !important; padding: 15px; border-radius: 15px; min-height: 520px; }}
-    div[data-testid="stColumn"]:has(.marker-2) {{ background-color: {s2['bg']} !important; padding: 15px; border-radius: 15px; min-height: 520px; }}
-    div[data-testid="stColumn"]:has(.marker-3) {{ background-color: {s3['bg']} !important; padding: 15px; border-radius: 15px; min-height: 520px; }}
-    div[data-testid="stColumn"]:has(.marker-4) {{ background-color: {s4['bg']} !important; padding: 15px; border-radius: 15px; min-height: 520px; }}
+    /* Background colors for each column */
+    div[data-testid="stColumn"]:has(.marker-1) {{ background-color: {s1['bg']} !important; padding: 20px; border-radius: 15px; min-height: 550px; }}
+    div[data-testid="stColumn"]:has(.marker-2) {{ background-color: {s2['bg']} !important; padding: 20px; border-radius: 15px; min-height: 550px; }}
+    div[data-testid="stColumn"]:has(.marker-3) {{ background-color: {s3['bg']} !important; padding: 20px; border-radius: 15px; min-height: 550px; }}
+    div[data-testid="stColumn"]:has(.marker-4) {{ background-color: {s4['bg']} !important; padding: 20px; border-radius: 15px; min-height: 550px; }}
+    
+    /* VISIBILITY FIX: Force Text Colors for headings inside columns */
+    div[data-testid="stColumn"]:has(.marker-1) h1, div[data-testid="stColumn"]:has(.marker-1) h2, div[data-testid="stColumn"]:has(.marker-1) h3 {{ color: {s1['text']} !important; }}
+    div[data-testid="stColumn"]:has(.marker-2) h1, div[data-testid="stColumn"]:has(.marker-2) h2, div[data-testid="stColumn"]:has(.marker-2) h3 {{ color: {s2['text']} !important; }}
+    div[data-testid="stColumn"]:has(.marker-3) h1, div[data-testid="stColumn"]:has(.marker-3) h2, div[data-testid="stColumn"]:has(.marker-3) h3 {{ color: {s3['text']} !important; }}
+    div[data-testid="stColumn"]:has(.marker-4) h1, div[data-testid="stColumn"]:has(.marker-4) h2, div[data-testid="stColumn"]:has(.marker-4) h3 {{ color: {s4['text']} !important; }}
+    
     button p {{ color: white !important; font-weight: bold !important; }}
 </style>
 """, unsafe_allow_html=True)
@@ -108,7 +116,7 @@ def add_time(name, minutes):
     timers[name]["remaining"] += minutes * 60
     timers[name]["status"] = "red"
 
-# --- 5. UI ---
+# --- 5. MAIN UI ---
 col_title, col_bell = st.columns([10, 1])
 with col_title: st.title("⏱️ Góc học tập cute")
 with col_bell:
@@ -129,44 +137,12 @@ for user in users:
     n = user["name"]
     with user["col"]:
         st.markdown(f'<span class="marker-{user["id"]}"></span>', unsafe_allow_html=True)
-        st.markdown(f"<h3>{'☕ Break!' if timers[n]['is_break'] else '&nbsp;'}</h3>", unsafe_allow_html=True)
-        try: st.image(user["image"], width=80)
+        st.markdown(f"<h2>{'☕ Break!' if timers[n]['is_break'] else '&nbsp;'}</h2>", unsafe_allow_html=True)
+        try: st.image(user["image"], width=100)
         except: st.write("👤")
         st.subheader(n)
         mm, ss = divmod(int(timers[n]["remaining"]), 60)
         st.markdown(f"<h1 style='text-align: center;'>{mm:02d}:{ss:02d}</h1>", unsafe_allow_html=True)
-        st.button("+ 50p", key=f"50_{n}", on_click=add_time, args=(n, 50), use_container_width=True)
+        st.button("+ 50 phút", key=f"50_{n}", on_click=add_time, args=(n, 50), use_container_width=True)
         ca, cb = st.columns(2)
-        ca.button("+ 1p", key=f"1_{n}", on_click=add_time, args=(n, 1), use_container_width=True)
-        cb.button("+ 5p", key=f"5_{n}", on_click=add_time, args=(n, 5), use_container_width=True)
-        st.button("Giải lao ☕", key=f"b_{n}", on_click=lambda x=n: timers[x].update({"is_break": not timers[x]["is_break"]}), use_container_width=True)
-        st.button("Stop/Go", key=f"p_{n}", on_click=lambda x=n: timers[x].update({"status": "yellow" if timers[x]["status"]=="red" else "red"}), use_container_width=True)
-        st.button("Reset", key=f"r_{n}", on_click=lambda x=n: timers[x].update({"remaining": 0.0, "status": "gray", "is_break": False, "start_time": None}), use_container_width=True)
-
-# --- 6. HISTORY ---
-st.divider()
-if data["history"]:
-    st.header("📜 Lịch sử")
-    df = pd.DataFrame(data["history"])
-    st.table(df.iloc[::-1])
-    h1, h2 = st.columns(2)
-    with h1: 
-        if st.button("Clear"): data["history"] = []; st.rerun()
-    with h2:
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as wr: df.to_excel(wr, index=False)
-        st.download_button("Excel", data=output.getvalue(), file_name="History.xlsx", mime="application/vnd.ms-excel")
-
-# --- 7. AUDIO ---
-audio_placeholder = st.empty()
-if data["last_global_bell_trigger"] > st.session_state.last_heard_global_bell:
-    audio_placeholder.html(get_audio_html("bellButton.mp3"))
-    st.session_state.last_heard_global_bell = data["last_global_bell_trigger"]
-
-if st.session_state.alarm_trigger:
-    f = "breakEnd.mp3" if st.session_state.alarm_trigger == "break" else "studyEnd.mp3"
-    audio_placeholder.html(get_audio_html(f, play_twice=True))
-    st.session_state.alarm_trigger = None 
-
-time.sleep(1)
-st.rerun()
+        ca.button("+ 1p", key=f"1_{n
