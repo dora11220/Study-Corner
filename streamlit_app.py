@@ -220,7 +220,7 @@ else:
 # 8. Audio Engine (At the very bottom to prevent layout shifting)
 # We keep audio players alive for several seconds so they aren't destroyed by st.rerun() before finishing
 if time.time() - st.session_state.bell_time < 3:
-    st.components.v1.html(get_audio_html("endBreak.mp3", play_twice=False), height=0)
+    st.components.v1.html(get_audio_html("breakEnd.mp3", play_twice=False), height=0)
 
 if time.time() - st.session_state.alarm_time < 10:  # 10 seconds alive time for double-play
     if st.session_state.alarm_type == "study":
