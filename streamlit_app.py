@@ -3,6 +3,7 @@ import time
 import base64
 import pandas as pd
 import io
+import os
 from datetime import datetime, timedelta, timezone
 
 st.set_page_config(layout="wide")
@@ -15,7 +16,7 @@ def get_now_gmt7():
 if "last_heard_bell_time" not in st.session_state: st.session_state.last_heard_bell_time = 0.0
 if "alarm_trigger" not in st.session_state: st.session_state.alarm_trigger = None
 
-# --- 2. AUDIO ENGINE ---
+# --- 2. AUDIO & IMAGE ENGINES ---
 def get_audio_html(file_name, play_twice=False):
     try:
         with open(file_name, "rb") as f:
@@ -25,6 +26,14 @@ def get_audio_html(file_name, play_twice=False):
                        <script>var i=1; var a=document.getElementById("a"); a.onended=function(){{if(i<2){{i++;a.play();}}}}</script>"""
         return f'<audio autoplay style="display:none;"><source src="data:audio/mp3;base64,{b64}" type="audio/mp3"></audio>'
     except: return ""
+
+def get_base64_bin(file_path):
+    try:
+        with open(file_path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    except: return ""
+
+bg_base64 = get_base64_bin("background.jpg")
 
 # --- 3. SHARED GLOBAL DATA ---
 @st.cache_resource
@@ -43,7 +52,7 @@ def get_global_data():
 
 data = get_global_data()
 
-# Timer Logic
+# Timer Tick logic
 cur = time.time()
 for name, t in data["timers"].items():
     if t["status"] == "red":
@@ -56,47 +65,57 @@ for name, t in data["timers"].items():
             t.update({"remaining": 0, "status": "gray", "start_time": None})
     t["last_tick"] = cur
 
-# --- 4. STYLES & GLOW EFFECT ---
+# --- 4. STYLES, GLOW, & SLIDING BACKGROUND ---
 def get_styles(name):
     t = data["timers"][name]
-    # Check if this person is currently ringing the bell (within last 5 seconds)
     is_ringing = (data["last_bell_ringer"] == name and (time.time() - data["last_bell_time"] < 5))
     
-    if is_ringing: return {"bg": "#FFFACD", "text": "#31333F", "glow": "0px 0px 30px 10px rgba(255, 215, 0, 0.7)"}
-    if t["is_break"]: return {"bg": "#4682B4", "text": "white", "glow": "none"}
-    if t["status"] == "red": return {"bg": "#FFB3B3", "text": "#31333F", "glow": "none"}
-    if t["status"] == "yellow": return {"bg": "#FFFFE0", "text": "#31333F", "glow": "none"}
-    return {"bg": "#F0F2F6", "text": "#31333F", "glow": "none"}
+    if is_ringing: return {"bg": "rgba(255, 250, 205, 0.9)", "text": "#31333F", "glow": "0px 0px 35px 15px rgba(255, 215, 0, 0.8)"}
+    if t["is_break"]: return {"bg": "rgba(70, 130, 180, 0.85)", "text": "white", "glow": "none"}
+    if t["status"] == "red": return {"bg": "rgba(255, 179, 179, 0.9)", "text": "#31333F", "glow": "none"}
+    if t["status"] == "yellow": return {"bg": "rgba(255, 255, 224, 0.9)", "text": "#31333F", "glow": "none"}
+    return {"bg": "rgba(240, 242, 246, 0.85)", "text": "#31333F", "glow": "none"}
 
 s = {n: get_styles(n) for n in data["timers"]}
 
 st.markdown(f"""
 <style>
-    @keyframes pulse {{ 0% {{ opacity: 1; }} 50% {{ opacity: 0.5; }} 100% {{ opacity: 1; }} }}
+    /* Sliding Background Animation */
+    [data-testid="stAppViewContainer"] {{
+        background-image: url("data:image/jpg;base64,{bg_base64}");
+        background-size: cover;
+        background-attachment: fixed;
+        animation: moveBg 60s linear infinite alternate;
+    }}
+
+    @keyframes moveBg {{
+        from {{ background-position: 0% 50%; }}
+        to {{ background-position: 100% 50%; }}
+    }}
+
+    /* Column Styles with individual markers */
     {" ".join([f'''
     div[data-testid="stColumn"]:has(.marker-{i+1}) {{ 
         background-color: {s[n]['bg']} !important; 
         box-shadow: {s[n]['glow']};
-        padding: 20px; border-radius: 15px; min-height: 600px; transition: all 0.5s ease;
+        padding: 20px; border-radius: 20px; min-height: 600px; 
+        transition: all 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        backdrop-filter: blur(5px); /* Optional: slight blur effect */
     }}
     div[data-testid="stColumn"]:has(.marker-{i+1}) h1, 
     div[data-testid="stColumn"]:has(.marker-{i+1}) h2, 
     div[data-testid="stColumn"]:has(.marker-{i+1}) h3 {{ color: {s[n]['text']} !important; }}
     ''' for i, n in enumerate(data["timers"])])}
+
+    /* Titles and Header visibility */
+    .stApp h1 {{ color: white !important; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }}
+    
     button p {{ color: white !important; font-weight: bold !important; }}
 </style>
 """, unsafe_allow_html=True)
 
-# --- 5. UI ---
+# --- 5. MAIN UI ---
 st.title("⏱️ Góc học tập cute")
-
-col1, col2, col3, col4 = st.columns(4)
-users = [
-    {"id": 1, "name": "Phồng Tôm", "image": "ptom.jpg", "col": col1},
-    {"id": 2, "name": "Phồng Rơm", "image": "prom.jpg", "col": col2},
-    {"id": 3, "name": "Thanh Độ",  "image": "Thanh.jpg", "col": col3},
-    {"id": 4, "name": "黄明",      "image": "hoang.jpg", "col": col4}
-]
 
 def add_time(name, m):
     t = data["timers"][name]
@@ -109,11 +128,18 @@ def ring_bell(name):
     data["last_bell_ringer"] = name
     data["last_bell_time"] = time.time()
 
+col1, col2, col3, col4 = st.columns(4)
+users = [
+    {"id": 1, "name": "Phồng Tôm", "image": "ptom.jpg", "col": col1},
+    {"id": 2, "name": "Phồng Rơm", "image": "prom.jpg", "col": col2},
+    {"id": 3, "name": "Thanh Độ",  "image": "Thanh.jpg", "col": col3},
+    {"id": 4, "name": "黄明",      "image": "hoang.jpg", "col": col4}
+]
+
 for u in users:
     n = u["name"]
     with u["col"]:
         st.markdown(f'<span class="marker-{u["id"]}"></span>', unsafe_allow_html=True)
-        # The Individual Bell Button
         st.button("🔔 Rung chuông", key=f"bell_{n}", on_click=ring_bell, args=(n,), use_container_width=True)
         st.markdown(f"<h2>{'☕ Break!' if data['timers'][n]['is_break'] else '&nbsp;'}</h2>", unsafe_allow_html=True)
         try: st.image(u["image"], width=100)
@@ -129,12 +155,12 @@ for u in users:
         st.button("Dừng / Tiếp tục", key=f"p_{n}", on_click=lambda x=n: data["timers"][x].update({"status": "yellow" if data["timers"][x]["status"]=="red" else "red"}), use_container_width=True)
         st.button("Reset", key=f"r_{n}", on_click=lambda x=n: data["timers"][x].update({"remaining": 0.0, "status": "gray", "is_break": False, "start_time": None}), use_container_width=True)
 
-# --- 6. HISTORY ---
+# --- 6. HISTORY SECTION ---
 st.divider()
-st.header("📜 Lịch sử học tập:")
+st.markdown("<h2 style='color: white;'>📜 Lịch sử học tập:</h2>", unsafe_allow_html=True)
 if data["history"]:
-    table = '<table style="width:100%; border-collapse: collapse;">'
-    table += '<tr style="border-bottom: 2px solid #ccc;"><th>User</th><th>Date</th><th>Start</th><th>End</th><th>Duration</th></tr>'
+    table = '<table style="width:100%; border-collapse: collapse; background-color: rgba(255,255,255,0.8); border-radius: 10px; overflow: hidden;">'
+    table += '<tr style="border-bottom: 2px solid #ccc; background-color: #eee;"><th>User</th><th>Date</th><th>Start</th><th>End</th><th>Duration</th></tr>'
     for e in reversed(data["history"]):
         c = "#1E90FF" if e["IsBreak"] else "inherit"
         table += f'<tr style="color: {c}; border-bottom: 1px solid #eee;"><td>{e["User"]} {"☕" if e["IsBreak"] else "📚"}</td><td>{e["Date"]}</td><td>{e["Start"]}</td><td>{e["End"]}</td><td>{e["Duration"]}</td></tr>'
