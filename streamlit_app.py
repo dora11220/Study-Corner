@@ -3,7 +3,6 @@ import time
 import base64
 import pandas as pd
 import io
-import os
 from datetime import datetime, timedelta, timezone
 
 st.set_page_config(layout="wide")
@@ -70,7 +69,7 @@ def get_styles(name):
     t = data["timers"][name]
     is_ringing = (data["last_bell_ringer"] == name and (time.time() - data["last_bell_time"] < 5))
     
-    if is_ringing: return {"bg": "rgba(255, 250, 205, 0.9)", "text": "#31333F", "glow": "0px 0px 35px 15px rgba(255, 215, 0, 0.8)"}
+    if is_ringing: return {"bg": "rgba(255, 250, 205, 0.95)", "text": "#31333F", "glow": "0px 0px 40px 20px rgba(255, 215, 0, 0.9)"}
     if t["is_break"]: return {"bg": "rgba(70, 130, 180, 0.85)", "text": "white", "glow": "none"}
     if t["status"] == "red": return {"bg": "rgba(255, 179, 179, 0.9)", "text": "#31333F", "glow": "none"}
     if t["status"] == "yellow": return {"bg": "rgba(255, 255, 224, 0.9)", "text": "#31333F", "glow": "none"}
@@ -80,35 +79,36 @@ s = {n: get_styles(n) for n in data["timers"]}
 
 st.markdown(f"""
 <style>
-    /* Sliding Background Animation */
+    /* Fixed the background animation by zooming in slightly (120%) so there is room to move */
     [data-testid="stAppViewContainer"] {{
         background-image: url("data:image/jpg;base64,{bg_base64}");
-        background-size: cover;
+        background-size: 130% 130%; 
         background-attachment: fixed;
-        animation: moveBg 60s linear infinite alternate;
+        animation: diagonalMove 40s ease-in-out infinite alternate;
     }}
 
-    @keyframes moveBg {{
-        from {{ background-position: 0% 50%; }}
-        to {{ background-position: 100% 50%; }}
+    @keyframes diagonalMove {{
+        0% {{ background-position: 0% 0%; }}
+        100% {{ background-position: 100% 100%; }}
     }}
 
-    /* Column Styles with individual markers */
+    /* Column Styles */
     {" ".join([f'''
     div[data-testid="stColumn"]:has(.marker-{i+1}) {{ 
         background-color: {s[n]['bg']} !important; 
         box-shadow: {s[n]['glow']};
         padding: 20px; border-radius: 20px; min-height: 600px; 
         transition: all 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        backdrop-filter: blur(5px); /* Optional: slight blur effect */
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255,255,255,0.3);
     }}
     div[data-testid="stColumn"]:has(.marker-{i+1}) h1, 
     div[data-testid="stColumn"]:has(.marker-{i+1}) h2, 
     div[data-testid="stColumn"]:has(.marker-{i+1}) h3 {{ color: {s[n]['text']} !important; }}
     ''' for i, n in enumerate(data["timers"])])}
 
-    /* Titles and Header visibility */
-    .stApp h1 {{ color: white !important; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }}
+    /* Text shadows for better visibility over background */
+    .stApp h1 {{ color: white !important; text-shadow: 3px 3px 6px rgba(0,0,0,0.7); font-size: 3rem !important; }}
     
     button p {{ color: white !important; font-weight: bold !important; }}
 </style>
@@ -157,10 +157,10 @@ for u in users:
 
 # --- 6. HISTORY SECTION ---
 st.divider()
-st.markdown("<h2 style='color: white;'>📜 Lịch sử học tập:</h2>", unsafe_allow_html=True)
+st.markdown("<h2 style='color: white; text-shadow: 2px 2px 4px black;'>📜 Lịch sử học tập:</h2>", unsafe_allow_html=True)
 if data["history"]:
-    table = '<table style="width:100%; border-collapse: collapse; background-color: rgba(255,255,255,0.8); border-radius: 10px; overflow: hidden;">'
-    table += '<tr style="border-bottom: 2px solid #ccc; background-color: #eee;"><th>User</th><th>Date</th><th>Start</th><th>End</th><th>Duration</th></tr>'
+    table = '<table style="width:100%; border-collapse: collapse; background-color: rgba(255,255,255,0.9); border-radius: 12px; overflow: hidden;">'
+    table += '<tr style="border-bottom: 2px solid #ccc; background-color: #f8f9fa;"><th>User</th><th>Date</th><th>Start</th><th>End</th><th>Duration</th></tr>'
     for e in reversed(data["history"]):
         c = "#1E90FF" if e["IsBreak"] else "inherit"
         table += f'<tr style="color: {c}; border-bottom: 1px solid #eee;"><td>{e["User"]} {"☕" if e["IsBreak"] else "📚"}</td><td>{e["Date"]}</td><td>{e["Start"]}</td><td>{e["End"]}</td><td>{e["Duration"]}</td></tr>'
