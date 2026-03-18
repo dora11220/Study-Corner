@@ -51,7 +51,7 @@ def get_global_data():
 
 data = get_global_data()
 
-# Timer Tick logic
+# Timer Logic
 cur = time.time()
 for name, t in data["timers"].items():
     if t["status"] == "red":
@@ -79,7 +79,6 @@ s = {n: get_styles(n) for n in data["timers"]}
 
 st.markdown(f"""
 <style>
-    /* Fixed the background animation by zooming in slightly (120%) so there is room to move */
     [data-testid="stAppViewContainer"] {{
         background-image: url("data:image/jpg;base64,{bg_base64}");
         background-size: 130% 130%; 
@@ -92,7 +91,6 @@ st.markdown(f"""
         100% {{ background-position: 100% 100%; }}
     }}
 
-    /* Column Styles */
     {" ".join([f'''
     div[data-testid="stColumn"]:has(.marker-{i+1}) {{ 
         background-color: {s[n]['bg']} !important; 
@@ -107,9 +105,7 @@ st.markdown(f"""
     div[data-testid="stColumn"]:has(.marker-{i+1}) h3 {{ color: {s[n]['text']} !important; }}
     ''' for i, n in enumerate(data["timers"])])}
 
-    /* Text shadows for better visibility over background */
     .stApp h1 {{ color: white !important; text-shadow: 3px 3px 6px rgba(0,0,0,0.7); font-size: 3rem !important; }}
-    
     button p {{ color: white !important; font-weight: bold !important; }}
 </style>
 """, unsafe_allow_html=True)
@@ -155,16 +151,26 @@ for u in users:
         st.button("Dừng / Tiếp tục", key=f"p_{n}", on_click=lambda x=n: data["timers"][x].update({"status": "yellow" if data["timers"][x]["status"]=="red" else "red"}), use_container_width=True)
         st.button("Reset", key=f"r_{n}", on_click=lambda x=n: data["timers"][x].update({"remaining": 0.0, "status": "gray", "is_break": False, "start_time": None}), use_container_width=True)
 
-# --- 6. HISTORY SECTION ---
+# --- 6. HISTORY SECTION (UPDATED FOR VISIBILITY) ---
 st.divider()
 st.markdown("<h2 style='color: white; text-shadow: 2px 2px 4px black;'>📜 Lịch sử học tập:</h2>", unsafe_allow_html=True)
 if data["history"]:
-    table = '<table style="width:100%; border-collapse: collapse; background-color: rgba(255,255,255,0.9); border-radius: 12px; overflow: hidden;">'
-    table += '<tr style="border-bottom: 2px solid #ccc; background-color: #f8f9fa;"><th>User</th><th>Date</th><th>Start</th><th>End</th><th>Duration</th></tr>'
+    # The new Black-Gray background table
+    table = '<table style="width:100%; border-collapse: collapse; background-color: rgba(30, 30, 30, 0.9); border-radius: 12px; overflow: hidden; color: white;">'
+    table += '<tr style="border-bottom: 2px solid #555; background-color: rgba(0, 0, 0, 0.5); text-align: left;">'
+    table += '<th style="padding: 12px;">User</th><th style="padding: 12px;">Date</th><th style="padding: 12px;">Start</th><th style="padding: 12px;">End</th><th style="padding: 12px;">Duration</th></tr>'
+    
     for e in reversed(data["history"]):
-        c = "#1E90FF" if e["IsBreak"] else "inherit"
-        table += f'<tr style="color: {c}; border-bottom: 1px solid #eee;"><td>{e["User"]} {"☕" if e["IsBreak"] else "📚"}</td><td>{e["Date"]}</td><td>{e["Start"]}</td><td>{e["End"]}</td><td>{e["Duration"]}</td></tr>'
+        # Keep the blue highlight for breaks, but make it bright blue for dark mode
+        c = "#00BFFF" if e["IsBreak"] else "white"
+        table += f'<tr style="color: {c}; border-bottom: 1px solid #444;">'
+        table += f'<td style="padding: 12px;">{e["User"]} {"☕" if e["IsBreak"] else "📚"}</td>'
+        table += f'<td style="padding: 12px;">{e["Date"]}</td>'
+        table += f'<td style="padding: 12px;">{e["Start"]}</td>'
+        table += f'<td style="padding: 12px;">{e["End"]}</td>'
+        table += f'<td style="padding: 12px;">{e["Duration"]}</td></tr>'
     st.markdown(table + '</table><br>', unsafe_allow_html=True)
+    
     h1, h2 = st.columns(2)
     with h1: 
         if st.button("🗑️ Clear All History", use_container_width=True): data["history"] = []; st.rerun()
