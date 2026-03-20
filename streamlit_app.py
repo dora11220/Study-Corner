@@ -15,40 +15,45 @@ def get_now_gmt7():
 # --- 1. SESSION STATE ---
 if "last_heard_bell_time" not in st.session_state: st.session_state.last_heard_bell_time = 0.0
 if "alarm_trigger" not in st.session_state: st.session_state.alarm_trigger = None
-if "sound_key" not in st.session_state: st.session_state.sound_key = 0
+# This queue stores the sounds that are currently "active" on the page
+if "sound_queue" not in st.session_state: st.session_state.sound_queue = []
 
-# --- 2. AUDIO ENGINE (ISOLATED COMPONENT) ---
-def play_sound(file_name, play_twice=False):
-    """Uses Streamlit Components to inject JS that survives reruns and overlaps."""
+# --- 2. THE NEW PERSISTENT AUDIO ENGINE ---
+def trigger_sound(file_name, play_twice=False):
+    """Adds a sound to the persistent queue so it survives reruns."""
     try:
         with open(file_name, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
         
-        loop_logic = """
-            var playCount = 1;
-            snd.onended = function() {
-                if(playCount < 2) {
-                    playCount++;
-                    this.play();
-                }
+        # Each sound gets a unique ID based on the exact microsecond it was triggered
+        sound_id = f"snd_{time.time()}"
+        
+        loop_code = """
+            var plays = 1;
+            audio.onended = function() {
+                if(plays < 2) { plays++; audio.play(); }
             };
         """ if play_twice else ""
 
-        js_html = f"""
-            <html>
-                <body>
-                    <script>
-                        var snd = new Audio("data:audio/mp3;base64,{b64}");
-                        snd.play().catch(e => console.log("Audio blocked by browser policy"));
-                        {loop_logic}
-                    </script>
-                </body>
-            </html>
+        html_content = f"""
+            <div id="{sound_id}" style="display:none;">
+                <audio autoplay id="aud_{sound_id}">
+                    <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+                </audio>
+                <script>
+                    var audio = document.getElementById("aud_{sound_id}");
+                    audio.volume = 1.0;
+                    {loop_code}
+                </script>
+            </div>
         """
-        # Increment key to force component to re-render (and thus re-play sound)
-        st.session_state.sound_key += 1
-        components.html(js_html, height=0, width=0)
-    except:
+        # We store the HTML and the time it was added
+        st.session_state.sound_queue.append({"id": sound_id, "html": html_content, "time": time.time()})
+        
+        # Keep only the last 5 sounds in the queue to keep the page light
+        if len(st.session_state.sound_queue) > 5:
+            st.session_state.sound_queue.pop(0)
+    except Exception as e:
         pass
 
 def get_base64_bin(file_path):
@@ -89,7 +94,7 @@ for name, t in data["timers"].items():
             t.update({"remaining": 0, "status": "gray", "start_time": None})
     t["last_tick"] = cur
 
-# --- 4. STYLES (NO CHANGES) ---
+# --- 4. STYLES (SLIDING BG & GLASS CARDS) ---
 def get_styles(name):
     t = data["timers"][name]
     is_ringing = (data["last_bell_ringer"] == name and (time.time() - data["last_bell_time"] < 5))
@@ -169,7 +174,7 @@ for u in users:
         st.button("Stop/Go", key=f"p_{n}", on_click=lambda x=n: data["timers"][x].update({"status": "yellow" if data["timers"][x]["status"]=="red" else "red"}), use_container_width=True)
         st.button("Reset", key=f"r_{n}", on_click=lambda x=n: data["timers"][x].update({"remaining": 0.0, "status": "gray", "is_break": False, "start_time": None}), use_container_width=True)
 
-# --- 6. HISTORY SECTION (KEEPING BLACK-GRAY) ---
+# --- 6. HISTORY SECTION (BLACK-GRAY) ---
 st.divider()
 st.markdown("<h2 style='color: white; text-shadow: 2px 2px 4px black;'>📜 Lịch sử học tập:</h2>", unsafe_allow_html=True)
 if data["history"]:
@@ -189,15 +194,21 @@ if data["history"]:
         with pd.ExcelWriter(out) as wr: df.to_excel(wr, index=False)
         st.download_button("📥 Tải file Excel", data=out.getvalue(), file_name="History.xlsx", use_container_width=True)
 
-# --- 7. AUDIO EXECUTION ---
+# --- 7. AUDIO HANDLING ---
+# Trigger sounds if needed
 if data["last_bell_time"] > st.session_state.last_heard_bell_time:
-    play_sound("bellButton.mp3")
+    trigger_sound("bellButton.mp3")
     st.session_state.last_heard_bell_time = data["last_bell_time"]
 
 if st.session_state.alarm_trigger:
     f = "breakEnd.mp3" if st.session_state.alarm_trigger == "break" else "studyEnd.mp3"
-    play_sound(f, play_twice=True)
+    trigger_sound(f, play_twice=True)
     st.session_state.alarm_trigger = None 
+
+# RENDER THE AUDIO QUEUE (Hidden at bottom)
+# Giving each its own unique key makes it stay on the page until we pop it from the queue
+for s_item in st.session_state.sound_queue:
+    components.html(s_item["html"], height=0, width=0, key=s_item["id"])
 
 # Regular refresh
 time.sleep(1)
