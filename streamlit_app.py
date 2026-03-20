@@ -16,7 +16,7 @@ if "last_bell_time" not in st.session_state: st.session_state.last_bell_time = 0
 if "heard_bell" not in st.session_state: st.session_state.heard_bell = 0.0
 if "alarm_trigger" not in st.session_state: st.session_state.alarm_trigger = None
 
-# --- 1. THE STATIC ASSETS (Loads ONLY ONCE) ---
+# --- 1. THE STATIC ASSETS ---
 @st.cache_data
 def get_base64(file_path):
     try:
@@ -66,7 +66,7 @@ def get_global_data():
 
 data = get_global_data()
 
-# --- 2. STATIC UI (Never refreshes) ---
+# --- 2. STATIC UI ---
 inject_audio_manager() 
 st.markdown(f"""
 <style>
@@ -82,7 +82,7 @@ st.markdown(f"""
 
 st.title("⏱️ Góc học tập cute")
 
-# --- 3. DYNAMIC DASHBOARD (Refreshes smoothly every 1 second) ---
+# --- 3. DYNAMIC DASHBOARD ---
 @st.fragment(run_every=1)
 def dashboard_ui():
     cur = time.time()
@@ -98,7 +98,6 @@ def dashboard_ui():
                 t.update({"remaining": 0, "status": "gray", "start_time": None})
         t["last_tick"] = cur
 
-    # Dynamic Styles for Timer Boxes
     def get_styles(name):
         t = data["timers"][name]
         is_ringing = (data["last_bell_ringer"] == name and (time.time() - data["last_bell_time"] < 5))
@@ -124,25 +123,25 @@ def dashboard_ui():
     </style>
     """, unsafe_allow_html=True)
 
-    # Timer UI Columns
     cols = st.columns(4)
     users = [("Phồng Tôm", "ptom.jpg"), ("Phồng Rơm", "prom.jpg"), ("Thanh Độ", "Thanh.jpg"), ("黄明", "hoang.jpg")]
-
-    def ring_bell(name):
-        data["last_bell_ringer"] = name
-        data["last_bell_time"] = time.time()
 
     for i, (n, img) in enumerate(users):
         with cols[i]:
             st.markdown(f'<span class="marker-{i+1}"></span>', unsafe_allow_html=True)
-            if st.button("🔔 Rung chuông", key=f"bl_{n}", use_container_width=True): ring_bell(n)
+            if st.button("🔔 Rung chuông", key=f"bl_{n}", use_container_width=True):
+                data["last_bell_ringer"] = n
+                data["last_bell_time"] = time.time()
+            
             st.markdown(f"<h2>{'☕' if data['timers'][n]['is_break'] else '&nbsp;'}</h2>", unsafe_allow_html=True)
             try: st.image(img, width=100)
             except: st.write("👤")
             st.subheader(n)
+            
             mm, ss = divmod(int(data["timers"][n]["remaining"]), 60)
             st.markdown(f"<h1 style='text-align: center;'>{mm:02d}:{ss:02d}</h1>", unsafe_allow_html=True)
             
+            # --- TIME ADDITION BUTTONS ---
             if st.button("+ 50p", key=f"50_{n}", use_container_width=True):
                 t = data["timers"][n]
                 if t["remaining"] <= 0: t["start_time"], t["initial_minutes"] = get_now_gmt7().strftime("%H:%M:%S"), 50
@@ -150,6 +149,24 @@ def dashboard_ui():
                 t["remaining"] += 3000
                 t["status"] = "red"
             
+            # New 1m and 5m buttons in a mini-row
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("+ 1p", key=f"1_{n}", use_container_width=True):
+                    t = data["timers"][n]
+                    if t["remaining"] <= 0: t["start_time"], t["initial_minutes"] = get_now_gmt7().strftime("%H:%M:%S"), 1
+                    else: t["initial_minutes"] += 1
+                    t["remaining"] += 60
+                    t["status"] = "red"
+            with c2:
+                if st.button("+ 5p", key=f"5_{n}", use_container_width=True):
+                    t = data["timers"][n]
+                    if t["remaining"] <= 0: t["start_time"], t["initial_minutes"] = get_now_gmt7().strftime("%H:%M:%S"), 5
+                    else: t["initial_minutes"] += 5
+                    t["remaining"] += 300
+                    t["status"] = "red"
+            
+            # Controls
             st.button("Giải lao ☕", key=f"b_{n}", on_click=lambda x=n: data["timers"][x].update({"is_break": not data["timers"][x]["is_break"]}), use_container_width=True)
             st.button("Stop/Go", key=f"p_{n}", on_click=lambda x=n: data["timers"][x].update({"status": "yellow" if data["timers"][x]["status"]=="red" else "red"}), use_container_width=True)
             st.button("Reset", key=f"r_{n}", on_click=lambda x=n: data["timers"][x].update({"remaining": 0.0, "status": "gray", "is_break": False, "start_time": None}), use_container_width=True)
@@ -173,7 +190,7 @@ def dashboard_ui():
             with pd.ExcelWriter(out) as wr: df.to_excel(wr, index=False)
             st.download_button("📥 Tải file Excel", data=out.getvalue(), file_name="History.xlsx", use_container_width=True)
 
-    # Trigger Audio Events natively within the fragment
+    # Audio Triggers
     if data["last_bell_time"] > st.session_state.heard_bell:
         components.html(f"<script>window.parent.playSnd('bell');</script>", height=0)
         st.session_state.heard_bell = data["last_bell_time"]
@@ -182,5 +199,4 @@ def dashboard_ui():
         components.html(f"<script>window.parent.playSnd('{st.session_state.alarm_trigger}');</script>", height=0)
         st.session_state.alarm_trigger = None
 
-# Initialize the dynamic part
 dashboard_ui()
