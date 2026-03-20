@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import time
 import base64
 import pandas as pd
@@ -14,36 +15,41 @@ def get_now_gmt7():
 # --- 1. SESSION STATE ---
 if "last_heard_bell_time" not in st.session_state: st.session_state.last_heard_bell_time = 0.0
 if "alarm_trigger" not in st.session_state: st.session_state.alarm_trigger = None
+if "sound_key" not in st.session_state: st.session_state.sound_key = 0
 
-# --- 2. AUDIO ENGINE (JAVASCRIPT OVERLAP VERSION) ---
-def get_audio_js(file_name, play_twice=False):
-    """Generates JS to play audio in the browser background so it won't be cut off by reruns."""
+# --- 2. AUDIO ENGINE (ISOLATED COMPONENT) ---
+def play_sound(file_name, play_twice=False):
+    """Uses Streamlit Components to inject JS that survives reruns and overlaps."""
     try:
         with open(file_name, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
         
-        # JS logic: Create a new Audio object, play it, and optionally loop once.
-        # This survives the Streamlit 'rerun' because the object exists in the browser window memory.
-        js_code = f"""
-        <script>
-            (function() {{
-                var snd = new Audio("data:audio/mp3;base64,{b64}");
-                snd.play();
-                {'''
-                var playCount = 1;
-                snd.onended = function() {{
-                    if(playCount < 2) {{
-                        playCount++;
-                        this.play();
-                    }}
-                }};
-                ''' if play_twice else ""}
-            }})();
-        </script>
+        loop_logic = """
+            var playCount = 1;
+            snd.onended = function() {
+                if(playCount < 2) {
+                    playCount++;
+                    this.play();
+                }
+            };
+        """ if play_twice else ""
+
+        js_html = f"""
+            <html>
+                <body>
+                    <script>
+                        var snd = new Audio("data:audio/mp3;base64,{b64}");
+                        snd.play().catch(e => console.log("Audio blocked by browser policy"));
+                        {loop_logic}
+                    </script>
+                </body>
+            </html>
         """
-        return js_code
+        # Increment key to force component to re-render (and thus re-play sound)
+        st.session_state.sound_key += 1
+        components.html(js_html, height=0, width=0)
     except:
-        return ""
+        pass
 
 def get_base64_bin(file_path):
     try:
@@ -83,7 +89,7 @@ for name, t in data["timers"].items():
             t.update({"remaining": 0, "status": "gray", "start_time": None})
     t["last_tick"] = cur
 
-# --- 4. STYLES (KEEPING THE SAME) ---
+# --- 4. STYLES (NO CHANGES) ---
 def get_styles(name):
     t = data["timers"][name]
     is_ringing = (data["last_bell_ringer"] == name and (time.time() - data["last_bell_time"] < 5))
@@ -163,7 +169,7 @@ for u in users:
         st.button("Stop/Go", key=f"p_{n}", on_click=lambda x=n: data["timers"][x].update({"status": "yellow" if data["timers"][x]["status"]=="red" else "red"}), use_container_width=True)
         st.button("Reset", key=f"r_{n}", on_click=lambda x=n: data["timers"][x].update({"remaining": 0.0, "status": "gray", "is_break": False, "start_time": None}), use_container_width=True)
 
-# --- 6. HISTORY SECTION ---
+# --- 6. HISTORY SECTION (KEEPING BLACK-GRAY) ---
 st.divider()
 st.markdown("<h2 style='color: white; text-shadow: 2px 2px 4px black;'>📜 Lịch sử học tập:</h2>", unsafe_allow_html=True)
 if data["history"]:
@@ -184,20 +190,15 @@ if data["history"]:
         st.download_button("📥 Tải file Excel", data=out.getvalue(), file_name="History.xlsx", use_container_width=True)
 
 # --- 7. AUDIO EXECUTION ---
-# We use a placeholder to inject the Javascript
-audio_placeholder = st.empty()
-
-# Play Bell
 if data["last_bell_time"] > st.session_state.last_heard_bell_time:
-    audio_placeholder.markdown(get_audio_js("bellButton.mp3"), unsafe_allow_html=True)
+    play_sound("bellButton.mp3")
     st.session_state.last_heard_bell_time = data["last_bell_time"]
 
-# Play Alarm (Multiple can fire if they happen at the same time)
 if st.session_state.alarm_trigger:
     f = "breakEnd.mp3" if st.session_state.alarm_trigger == "break" else "studyEnd.mp3"
-    audio_placeholder.markdown(get_audio_js(f, play_twice=True), unsafe_allow_html=True)
+    play_sound(f, play_twice=True)
     st.session_state.alarm_trigger = None 
 
-# Timer Refresh
+# Regular refresh
 time.sleep(1)
 st.rerun()
