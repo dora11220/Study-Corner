@@ -15,16 +15,35 @@ def get_now_gmt7():
 if "last_heard_bell_time" not in st.session_state: st.session_state.last_heard_bell_time = 0.0
 if "alarm_trigger" not in st.session_state: st.session_state.alarm_trigger = None
 
-# --- 2. AUDIO & IMAGE ENGINES ---
-def get_audio_html(file_name, play_twice=False):
+# --- 2. AUDIO ENGINE (JAVASCRIPT OVERLAP VERSION) ---
+def get_audio_js(file_name, play_twice=False):
+    """Generates JS to play audio in the browser background so it won't be cut off by reruns."""
     try:
         with open(file_name, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
-        if play_twice:
-            return f"""<audio id="a" autoplay><source src="data:audio/mp3;base64,{b64}"></audio>
-                       <script>var i=1; var a=document.getElementById("a"); a.onended=function(){{if(i<2){{i++;a.play();}}}}</script>"""
-        return f'<audio autoplay style="display:none;"><source src="data:audio/mp3;base64,{b64}" type="audio/mp3"></audio>'
-    except: return ""
+        
+        # JS logic: Create a new Audio object, play it, and optionally loop once.
+        # This survives the Streamlit 'rerun' because the object exists in the browser window memory.
+        js_code = f"""
+        <script>
+            (function() {{
+                var snd = new Audio("data:audio/mp3;base64,{b64}");
+                snd.play();
+                {'''
+                var playCount = 1;
+                snd.onended = function() {{
+                    if(playCount < 2) {{
+                        playCount++;
+                        this.play();
+                    }}
+                }};
+                ''' if play_twice else ""}
+            }})();
+        </script>
+        """
+        return js_code
+    except:
+        return ""
 
 def get_base64_bin(file_path):
     try:
@@ -64,11 +83,10 @@ for name, t in data["timers"].items():
             t.update({"remaining": 0, "status": "gray", "start_time": None})
     t["last_tick"] = cur
 
-# --- 4. STYLES, GLOW, & SLIDING BACKGROUND ---
+# --- 4. STYLES (KEEPING THE SAME) ---
 def get_styles(name):
     t = data["timers"][name]
     is_ringing = (data["last_bell_ringer"] == name and (time.time() - data["last_bell_time"] < 5))
-    
     if is_ringing: return {"bg": "rgba(255, 250, 205, 0.95)", "text": "#31333F", "glow": "0px 0px 40px 20px rgba(255, 215, 0, 0.9)"}
     if t["is_break"]: return {"bg": "rgba(70, 130, 180, 0.85)", "text": "white", "glow": "none"}
     if t["status"] == "red": return {"bg": "rgba(255, 179, 179, 0.9)", "text": "#31333F", "glow": "none"}
@@ -85,12 +103,7 @@ st.markdown(f"""
         background-attachment: fixed;
         animation: diagonalMove 40s ease-in-out infinite alternate;
     }}
-
-    @keyframes diagonalMove {{
-        0% {{ background-position: 0% 0%; }}
-        100% {{ background-position: 100% 100%; }}
-    }}
-
+    @keyframes diagonalMove {{ 0% {{ background-position: 0% 0%; }} 100% {{ background-position: 100% 100%; }} }}
     {" ".join([f'''
     div[data-testid="stColumn"]:has(.marker-{i+1}) {{ 
         background-color: {s[n]['bg']} !important; 
@@ -104,7 +117,6 @@ st.markdown(f"""
     div[data-testid="stColumn"]:has(.marker-{i+1}) h2, 
     div[data-testid="stColumn"]:has(.marker-{i+1}) h3 {{ color: {s[n]['text']} !important; }}
     ''' for i, n in enumerate(data["timers"])])}
-
     .stApp h1 {{ color: white !important; text-shadow: 3px 3px 6px rgba(0,0,0,0.7); font-size: 3rem !important; }}
     button p {{ color: white !important; font-weight: bold !important; }}
 </style>
@@ -148,29 +160,20 @@ for u in users:
         ca.button("+ 1p", key=f"1_{n}", on_click=add_time, args=(n, 1), use_container_width=True)
         cb.button("+ 5p", key=f"5_{n}", on_click=add_time, args=(n, 5), use_container_width=True)
         st.button("Giải lao ☕", key=f"b_{n}", on_click=lambda x=n: data["timers"][x].update({"is_break": not data["timers"][x]["is_break"]}), use_container_width=True)
-        st.button("Dừng / Tiếp tục", key=f"p_{n}", on_click=lambda x=n: data["timers"][x].update({"status": "yellow" if data["timers"][x]["status"]=="red" else "red"}), use_container_width=True)
+        st.button("Stop/Go", key=f"p_{n}", on_click=lambda x=n: data["timers"][x].update({"status": "yellow" if data["timers"][x]["status"]=="red" else "red"}), use_container_width=True)
         st.button("Reset", key=f"r_{n}", on_click=lambda x=n: data["timers"][x].update({"remaining": 0.0, "status": "gray", "is_break": False, "start_time": None}), use_container_width=True)
 
-# --- 6. HISTORY SECTION (UPDATED FOR VISIBILITY) ---
+# --- 6. HISTORY SECTION ---
 st.divider()
 st.markdown("<h2 style='color: white; text-shadow: 2px 2px 4px black;'>📜 Lịch sử học tập:</h2>", unsafe_allow_html=True)
 if data["history"]:
-    # The new Black-Gray background table
     table = '<table style="width:100%; border-collapse: collapse; background-color: rgba(30, 30, 30, 0.9); border-radius: 12px; overflow: hidden; color: white;">'
     table += '<tr style="border-bottom: 2px solid #555; background-color: rgba(0, 0, 0, 0.5); text-align: left;">'
     table += '<th style="padding: 12px;">User</th><th style="padding: 12px;">Date</th><th style="padding: 12px;">Start</th><th style="padding: 12px;">End</th><th style="padding: 12px;">Duration</th></tr>'
-    
     for e in reversed(data["history"]):
-        # Keep the blue highlight for breaks, but make it bright blue for dark mode
         c = "#00BFFF" if e["IsBreak"] else "white"
-        table += f'<tr style="color: {c}; border-bottom: 1px solid #444;">'
-        table += f'<td style="padding: 12px;">{e["User"]} {"☕" if e["IsBreak"] else "📚"}</td>'
-        table += f'<td style="padding: 12px;">{e["Date"]}</td>'
-        table += f'<td style="padding: 12px;">{e["Start"]}</td>'
-        table += f'<td style="padding: 12px;">{e["End"]}</td>'
-        table += f'<td style="padding: 12px;">{e["Duration"]}</td></tr>'
+        table += f'<tr style="color: {c}; border-bottom: 1px solid #444;"><td style="padding: 12px;">{e["User"]} {"☕" if e["IsBreak"] else "📚"}</td><td style="padding: 12px;">{e["Date"]}</td><td style="padding: 12px;">{e["Start"]}</td><td style="padding: 12px;">{e["End"]}</td><td style="padding: 12px;">{e["Duration"]}</td></tr>'
     st.markdown(table + '</table><br>', unsafe_allow_html=True)
-    
     h1, h2 = st.columns(2)
     with h1: 
         if st.button("🗑️ Clear All History", use_container_width=True): data["history"] = []; st.rerun()
@@ -180,20 +183,21 @@ if data["history"]:
         with pd.ExcelWriter(out) as wr: df.to_excel(wr, index=False)
         st.download_button("📥 Tải file Excel", data=out.getvalue(), file_name="History.xlsx", use_container_width=True)
 
-# --- 7. AUDIO & REFRESH ---
+# --- 7. AUDIO EXECUTION ---
+# We use a placeholder to inject the Javascript
 audio_placeholder = st.empty()
-sleep_time = 1
 
+# Play Bell
 if data["last_bell_time"] > st.session_state.last_heard_bell_time:
-    audio_placeholder.html(get_audio_html("bellButton.mp3"))
+    audio_placeholder.markdown(get_audio_js("bellButton.mp3"), unsafe_allow_html=True)
     st.session_state.last_heard_bell_time = data["last_bell_time"]
-    sleep_time = 4 
 
+# Play Alarm (Multiple can fire if they happen at the same time)
 if st.session_state.alarm_trigger:
     f = "breakEnd.mp3" if st.session_state.alarm_trigger == "break" else "studyEnd.mp3"
-    audio_placeholder.html(get_audio_html(f, play_twice=True))
+    audio_placeholder.markdown(get_audio_js(f, play_twice=True), unsafe_allow_html=True)
     st.session_state.alarm_trigger = None 
-    sleep_time = 4 
 
-time.sleep(sleep_time)
+# Timer Refresh
+time.sleep(1)
 st.rerun()
