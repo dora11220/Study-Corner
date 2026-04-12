@@ -66,6 +66,15 @@ def get_global_data():
 
 data = get_global_data()
 
+# Helper function to add time to a timer
+def add_timer_minutes(t, mins):
+    if t["remaining"] <= 0: 
+        t["start_time"], t["initial_minutes"] = get_now_gmt7().strftime("%H:%M:%S"), mins
+    else: 
+        t["initial_minutes"] += mins
+    t["remaining"] += mins * 60
+    t["status"] = "red"
+
 # --- 2. STATIC UI ---
 inject_audio_manager() 
 st.markdown(f"""
@@ -87,15 +96,30 @@ st.title("⏱️ Góc học tập cute")
 def dashboard_ui():
     cur = time.time()
     
-    # Timer Logic
+    # Timer Logic & Auto-Break Feature
     for name, t in data["timers"].items():
         if t["status"] == "red":
             t["remaining"] -= (cur - t["last_tick"])
             if t["remaining"] <= 0:
                 if t["start_time"]:
                     data["history"].append({"User": name, "Date": get_now_gmt7().strftime("%Y-%m-%d"), "Start": t["start_time"], "End": get_now_gmt7().strftime("%H:%M:%S"), "Duration": f"{t['initial_minutes']} min", "IsBreak": t["is_break"]})
+                
                 st.session_state.alarm_trigger = "break" if t["is_break"] else "study"
-                t.update({"remaining": 0, "status": "gray", "start_time": None})
+                
+                # Check if just finished studying
+                if not t["is_break"]:
+                    # Auto start 10-minute break
+                    t.update({
+                        "remaining": 600.0, # 10 minutes in seconds
+                        "status": "red", 
+                        "start_time": get_now_gmt7().strftime("%H:%M:%S"),
+                        "initial_minutes": 10,
+                        "is_break": True
+                    })
+                else:
+                    # Finished break, stop timer
+                    t.update({"remaining": 0, "status": "gray", "start_time": None, "is_break": False})
+                    
         t["last_tick"] = cur
 
     def get_styles(name):
@@ -141,30 +165,17 @@ def dashboard_ui():
             mm, ss = divmod(int(data["timers"][n]["remaining"]), 60)
             st.markdown(f"<h1 style='text-align: center;'>{mm:02d}:{ss:02d}</h1>", unsafe_allow_html=True)
             
-            # --- TIME ADDITION BUTTONS ---
+            # --- TIME ADDITION BUTTONS (Optimized) ---
             if st.button("+ 50p", key=f"50_{n}", use_container_width=True):
-                t = data["timers"][n]
-                if t["remaining"] <= 0: t["start_time"], t["initial_minutes"] = get_now_gmt7().strftime("%H:%M:%S"), 50
-                else: t["initial_minutes"] += 50
-                t["remaining"] += 3000
-                t["status"] = "red"
+                add_timer_minutes(data["timers"][n], 50)
             
-            # New 1m and 5m buttons in a mini-row
             c1, c2 = st.columns(2)
             with c1:
                 if st.button("+ 1p", key=f"1_{n}", use_container_width=True):
-                    t = data["timers"][n]
-                    if t["remaining"] <= 0: t["start_time"], t["initial_minutes"] = get_now_gmt7().strftime("%H:%M:%S"), 1
-                    else: t["initial_minutes"] += 1
-                    t["remaining"] += 60
-                    t["status"] = "red"
+                    add_timer_minutes(data["timers"][n], 1)
             with c2:
                 if st.button("+ 5p", key=f"5_{n}", use_container_width=True):
-                    t = data["timers"][n]
-                    if t["remaining"] <= 0: t["start_time"], t["initial_minutes"] = get_now_gmt7().strftime("%H:%M:%S"), 5
-                    else: t["initial_minutes"] += 5
-                    t["remaining"] += 300
-                    t["status"] = "red"
+                    add_timer_minutes(data["timers"][n], 5)
             
             # Controls
             st.button("Giải lao ☕", key=f"b_{n}", on_click=lambda x=n: data["timers"][x].update({"is_break": not data["timers"][x]["is_break"]}), use_container_width=True)
