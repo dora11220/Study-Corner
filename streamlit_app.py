@@ -22,9 +22,10 @@ if "alarm_trigger" not in st.session_state: st.session_state.alarm_trigger = Non
 SCRIPT_URL = st.secrets["SCRIPT_URL"]
 
 def load_history_from_sheet():
-    """Read existing rows from the sheet (runs once when the server starts)."""
+    """Returns (rows, error). error is None on success."""
     try:
-        rows = requests.get(SCRIPT_URL, timeout=15).json()
+        resp = requests.get(SCRIPT_URL, timeout=15)
+        rows = resp.json()
         out = []
         for r in rows[1:]:  # skip header row
             if not any(r):
@@ -33,10 +34,9 @@ def load_history_from_sheet():
                 "User": r[0], "Date": r[1], "Start": r[2], "End": r[3],
                 "Duration": r[4], "IsBreak": str(r[5]).strip().lower() == "true",
             })
-        return out
+        return out, None
     except Exception as e:
-        print("Could not load history:", e)
-        return []
+        return [], str(e)
 
 def _post_to_sheet(payload, error_holder):
     """Runs in a background thread so the timers never freeze."""
@@ -99,7 +99,9 @@ def get_global_data():
             "Thanh Độ":  {"remaining": 0.0, "status": "gray", "last_tick": time.time(), "is_break": False, "start_time": None, "initial_minutes": 0},
             "黄明":      {"remaining": 0.0, "status": "gray", "last_tick": time.time(), "is_break": False, "start_time": None, "initial_minutes": 0}
         },
-        "history": load_history_from_sheet(),   # loaded from Google Sheet
+        "history": [],
+        "history_loaded": False,
+        "last_load_try": 0.0,
         "last_bell_ringer": None,
         "last_bell_time": 0.0,
         "sheet_error": None
@@ -136,6 +138,17 @@ st.title("⏱️ Góc học tập cute")
 @st.fragment(run_every=1)
 def dashboard_ui():
     cur = time.time()
+
+    # Load history from the sheet; retry every 10s until it succeeds
+    if not data["history_loaded"] and cur - data["last_load_try"] > 10:
+        data["last_load_try"] = cur
+        rows, err = load_history_from_sheet()
+        if err is None:
+            data["history"] = rows + data["history"]
+            data["history_loaded"] = True
+            data["sheet_error"] = None
+        else:
+            data["sheet_error"] = f"Không tải được lịch sử: {err}"
 
     # Timer Logic & Auto-Break Feature
     for name, t in data["timers"].items():
