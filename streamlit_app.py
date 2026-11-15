@@ -139,7 +139,8 @@ st.markdown(f"""
 
 st.title("⏱️ Góc học tập cute")
 
-# --- 3. DYNAMIC DASHBOARD ---
+st.link_button("Sao kê 💫", "https://docs.google.com/spreadsheets/d/1mLlQP_oY1cThDmLBgn7CT9ONJqhMB1FskWAoJ3GflyM/edit?gid=0#gid=0")
+ # --- 3. DYNAMIC DASHBOARD ---
 @st.fragment(run_every=1)
 def dashboard_ui():
     cur = time.time()
