@@ -95,7 +95,6 @@ USERS = [
     ("Phồng Tôm", "ptom.jpg"),
     ("Phồng Rơm", "prom.jpg"),
     ("Thanh Độ", "Thanh.jpg"),
-    ("黄明", "hoang.jpg"),
 ]
 
 @st.cache_resource
