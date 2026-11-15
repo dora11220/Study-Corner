@@ -90,14 +90,20 @@ def inject_audio_manager():
         </script>
     """, height=0)
 
+# --- PROFILES: to add or remove a person, edit ONLY this list (name, photo file) ---
+USERS = [
+    ("Phồng Tôm", "ptom.jpg"),
+    ("Phồng Rơm", "prom.jpg"),
+    ("Thanh Độ", "Thanh.jpg"),
+    ("黄明", "hoang.jpg"),
+]
+
 @st.cache_resource
 def get_global_data():
     return {
         "timers": {
-            "Phồng Tôm": {"remaining": 0.0, "status": "gray", "last_tick": time.time(), "is_break": False, "start_time": None, "initial_minutes": 0},
-            "Phồng Rơm": {"remaining": 0.0, "status": "gray", "last_tick": time.time(), "is_break": False, "start_time": None, "initial_minutes": 0},
-            "Thanh Độ":  {"remaining": 0.0, "status": "gray", "last_tick": time.time(), "is_break": False, "start_time": None, "initial_minutes": 0},
-            "黄明":      {"remaining": 0.0, "status": "gray", "last_tick": time.time(), "is_break": False, "start_time": None, "initial_minutes": 0}
+            name: {"remaining": 0.0, "status": "gray", "last_tick": time.time(), "is_break": False, "start_time": None, "initial_minutes": 0}
+            for name, _ in USERS
         },
         "history": [],
         "history_loaded": False,
@@ -202,10 +208,9 @@ def dashboard_ui():
     </style>
     """, unsafe_allow_html=True)
 
-    cols = st.columns(4)
-    users = [("Phồng Tôm", "ptom.jpg"), ("Phồng Rơm", "prom.jpg"), ("Thanh Độ", "Thanh.jpg"), ("黄明", "hoang.jpg")]
+    cols = st.columns(len(USERS))
 
-    for i, (n, img) in enumerate(users):
+    for i, (n, img) in enumerate(USERS):
         with cols[i]:
             st.markdown(f'<span class="marker-{i+1}"></span>', unsafe_allow_html=True)
             if st.button("🔔 Rung chuông", key=f"bl_{n}", use_container_width=True):
