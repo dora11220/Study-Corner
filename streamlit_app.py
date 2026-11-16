@@ -141,8 +141,9 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("⏱️ Góc học tập cute")
+st.title("⏱️ Góc học tập kute")
 
+st.link_button("Sao kê 🥗🥖🍟🍔")
 # --- 3. DYNAMIC DASHBOARD ---
 @st.fragment(run_every=1)
 def dashboard_ui():
