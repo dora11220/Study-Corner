@@ -23,7 +23,7 @@ SCRIPT_URL = st.secrets["SCRIPT_URL"]
 
 # "Clear All History" deletes from this sheet row downward (row 1 = header).
 # Rows above it are kept. Change this number whenever you want.
-CLEAR_FROM_ROW = 7
+CLEAR_FROM_ROW = 10
 
 def load_history_from_sheet():
     """Returns (rows, error). error is None on success."""
