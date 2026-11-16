@@ -21,6 +21,10 @@ if "alarm_trigger" not in st.session_state: st.session_state.alarm_trigger = Non
 # --- 0.5 GOOGLE SHEETS (via Apps Script) ---
 SCRIPT_URL = st.secrets["SCRIPT_URL"]
 
+# "Clear All History" deletes from this sheet row downward (row 1 = header).
+# Rows above it are kept. Change this number whenever you want.
+CLEAR_FROM_ROW = 7
+
 def load_history_from_sheet():
     """Returns (rows, error). error is None on success."""
     try:
@@ -54,7 +58,7 @@ def save_entry_to_sheet(entry, error_holder):
     threading.Thread(target=_post_to_sheet, args=(payload, error_holder), daemon=True).start()
 
 def clear_sheet(error_holder):
-    threading.Thread(target=_post_to_sheet, args=({"action": "clear"}, error_holder), daemon=True).start()
+    threading.Thread(target=_post_to_sheet, args=({"action": "clear", "fromRow": CLEAR_FROM_ROW}, error_holder), daemon=True).start()
 
 # --- 1. THE STATIC ASSETS ---
 @st.cache_data
@@ -139,8 +143,7 @@ st.markdown(f"""
 
 st.title("⏱️ Góc học tập cute")
 
-st.link_button("Sao kê 💫", "https://docs.google.com/spreadsheets/d/1mLlQP_oY1cThDmLBgn7CT9ONJqhMB1FskWAoJ3GflyM/edit?gid=0#gid=0")
- # --- 3. DYNAMIC DASHBOARD ---
+# --- 3. DYNAMIC DASHBOARD ---
 @st.fragment(run_every=1)
 def dashboard_ui():
     cur = time.time()
@@ -259,7 +262,8 @@ def dashboard_ui():
         h1, h2 = st.columns(2)
         with h1:
             if st.button("🗑️ Clear All History", use_container_width=True):
-                data["history"].clear()
+                # keep the rows above CLEAR_FROM_ROW (row 1 is the header, so history starts at row 2)
+                data["history"] = data["history"][:max(0, CLEAR_FROM_ROW - 2)]
                 clear_sheet(data)   # also clear the sheet
         with h2:
             df = pd.DataFrame(data["history"])
