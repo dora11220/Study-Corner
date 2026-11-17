@@ -147,7 +147,7 @@ st.markdown(f"""
 
 st.title("⏱️ Góc học tập cute")
 
-st.button_link("Sao kê ê , "https://docs.google.com/spreadsheets/d/1mLlQP_oY1cThDmLBgn7CT9ONJqhMB1FskWAoJ3GflyM/edit?gid=0#gid=0")
+st.button_link("Sao kê ê ", "https://docs.google.com/spreadsheets/d/1mLlQP_oY1cThDmLBgn7CT9ONJqhMB1FskWAoJ3GflyM/edit?gid=0#gid=0")
 
 # --- 3. DYNAMIC DASHBOARD ---
 @st.fragment(run_every=1)
