@@ -25,14 +25,18 @@ SCRIPT_URL = st.secrets["SCRIPT_URL"]
 # Rows above it are kept. Change this number whenever you want.
 CLEAR_FROM_ROW = 7
 
+# First sheet row that holds real session data (rows above it are headers/links/summary tables).
+DATA_START_ROW = 7
+
 def load_history_from_sheet():
     """Returns (rows, error). error is None on success."""
     try:
         resp = requests.get(SCRIPT_URL, timeout=15)
         rows = resp.json()
         out = []
-        for r in rows[1:]:  # skip header row
-            if not any(r):
+        for r in rows[DATA_START_ROW - 1:]:  # only real data rows
+            r = (list(r) + [""] * 6)[:6]      # only columns A-F
+            if not str(r[0]).strip():          # skip rows with no User
                 continue
             out.append({
                 "User": r[0], "Date": r[1], "Start": r[2], "End": r[3],
@@ -141,9 +145,8 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("⏱️ Góc học tập kute")
+st.title("⏱️ Góc học tập cute")
 
-st.link_button("Sao kê 🥗🥖🍟🍔","https://docs.google.com/spreadsheets/d/1mLlQP_oY1cThDmLBgn7CT9ONJqhMB1FskWAoJ3GflyM/edit?gid=0#gid=0")
 # --- 3. DYNAMIC DASHBOARD ---
 @st.fragment(run_every=1)
 def dashboard_ui():
@@ -263,8 +266,8 @@ def dashboard_ui():
         h1, h2 = st.columns(2)
         with h1:
             if st.button("🗑️ Clear All History", use_container_width=True):
-                # keep the rows above CLEAR_FROM_ROW (row 1 is the header, so history starts at row 2)
-                data["history"] = data["history"][:max(0, CLEAR_FROM_ROW - 2)]
+                # keep data rows that sit above CLEAR_FROM_ROW
+                data["history"] = data["history"][:max(0, CLEAR_FROM_ROW - DATA_START_ROW)]
                 clear_sheet(data)   # also clear the sheet
         with h2:
             df = pd.DataFrame(data["history"])
